@@ -92,6 +92,12 @@ export function AdminShell({ title, children }: { title: string; children: React
   const { isAdmin, loading: roleLoading } = useIsAdmin();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate({ to: "/auth" });
+    }
+  }, [authLoading, user, navigate]);
+
   if (authLoading || roleLoading) {
     return (
       <div className="min-h-screen grid place-items-center">
@@ -101,8 +107,11 @@ export function AdminShell({ title, children }: { title: string; children: React
   }
 
   if (!user) {
-    navigate({ to: "/auth" });
-    return null;
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-muted-foreground text-sm">Redirecting…</div>
+      </div>
+    );
   }
 
   if (!isAdmin) {
