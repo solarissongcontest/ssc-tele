@@ -14,16 +14,294 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      anti_abuse_events: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          device_token_hash: string | null
+          fingerprint_hash: string | null
+          id: string
+          ip_hash: string | null
+          metadata: Json
+          reason: string
+          risk_score: number
+          round_id: string | null
+          status: string
+          username: string | null
+          username_normalized: string | null
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          device_token_hash?: string | null
+          fingerprint_hash?: string | null
+          id?: string
+          ip_hash?: string | null
+          metadata?: Json
+          reason: string
+          risk_score?: number
+          round_id?: string | null
+          status?: string
+          username?: string | null
+          username_normalized?: string | null
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          device_token_hash?: string | null
+          fingerprint_hash?: string | null
+          id?: string
+          ip_hash?: string | null
+          metadata?: Json
+          reason?: string
+          risk_score?: number
+          round_id?: string | null
+          status?: string
+          username?: string | null
+          username_normalized?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anti_abuse_events_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      countries: {
+        Row: {
+          code: string
+          flag: string
+          name: string
+        }
+        Insert: {
+          code: string
+          flag: string
+          name: string
+        }
+        Update: {
+          code?: string
+          flag?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      editions: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_archived: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_archived?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_archived?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      round_countries: {
+        Row: {
+          country_code: string
+          display_order: number
+          id: string
+          round_id: string
+        }
+        Insert: {
+          country_code: string
+          display_order: number
+          id?: string
+          round_id: string
+        }
+        Update: {
+          country_code?: string
+          display_order?: number
+          id?: string
+          round_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "round_countries_country_code_fkey"
+            columns: ["country_code"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "round_countries_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rounds: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          edition_id: string
+          id: string
+          name: string
+          opened_at: string | null
+          status: Database["public"]["Enums"]["round_status"]
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          edition_id: string
+          id?: string
+          name: string
+          opened_at?: string | null
+          status?: Database["public"]["Enums"]["round_status"]
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          edition_id?: string
+          id?: string
+          name?: string
+          opened_at?: string | null
+          status?: Database["public"]["Enums"]["round_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rounds_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "editions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: number
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: never
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: never
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vote_entries: {
+        Row: {
+          id: string
+          points: number
+          submission_id: string
+          target_country_code: string
+        }
+        Insert: {
+          id?: string
+          points: number
+          submission_id: string
+          target_country_code: string
+        }
+        Update: {
+          id?: string
+          points?: number
+          submission_id?: string
+          target_country_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vote_entries_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "vote_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vote_submissions: {
+        Row: {
+          country_code: string
+          created_at: string
+          device_token_hash: string | null
+          fingerprint_hash: string | null
+          id: string
+          ip_hash: string | null
+          risk_score: number
+          round_id: string
+          username: string
+          username_normalized: string
+        }
+        Insert: {
+          country_code: string
+          created_at?: string
+          device_token_hash?: string | null
+          fingerprint_hash?: string | null
+          id?: string
+          ip_hash?: string | null
+          risk_score?: number
+          round_id: string
+          username: string
+          username_normalized: string
+        }
+        Update: {
+          country_code?: string
+          created_at?: string
+          device_token_hash?: string | null
+          fingerprint_hash?: string | null
+          id?: string
+          ip_hash?: string | null
+          risk_score?: number
+          round_id?: string
+          username?: string
+          username_normalized?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vote_submissions_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
+      round_status: "draft" | "open" | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +428,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+      round_status: ["draft", "open", "closed"],
+    },
   },
 } as const
