@@ -9,38 +9,152 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminRoundsRouteImport } from './routes/admin.rounds'
+import { Route as AdminResultsRouteImport } from './routes/admin.results'
+import { Route as AdminEditionsRouteImport } from './routes/admin.editions'
+import { Route as AdminAntiAbuseRouteImport } from './routes/admin.anti-abuse'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRoundsRoute = AdminRoundsRouteImport.update({
+  id: '/rounds',
+  path: '/rounds',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminResultsRoute = AdminResultsRouteImport.update({
+  id: '/results',
+  path: '/results',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminEditionsRoute = AdminEditionsRouteImport.update({
+  id: '/editions',
+  path: '/editions',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAntiAbuseRoute = AdminAntiAbuseRouteImport.update({
+  id: '/anti-abuse',
+  path: '/anti-abuse',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/anti-abuse': typeof AdminAntiAbuseRoute
+  '/admin/editions': typeof AdminEditionsRoute
+  '/admin/results': typeof AdminResultsRoute
+  '/admin/rounds': typeof AdminRoundsRoute
+  '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/anti-abuse': typeof AdminAntiAbuseRoute
+  '/admin/editions': typeof AdminEditionsRoute
+  '/admin/results': typeof AdminResultsRoute
+  '/admin/rounds': typeof AdminRoundsRoute
+  '/admin': typeof AdminIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/anti-abuse': typeof AdminAntiAbuseRoute
+  '/admin/editions': typeof AdminEditionsRoute
+  '/admin/results': typeof AdminResultsRoute
+  '/admin/rounds': typeof AdminRoundsRoute
+  '/admin/': typeof AdminIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/admin/analytics'
+    | '/admin/anti-abuse'
+    | '/admin/editions'
+    | '/admin/results'
+    | '/admin/rounds'
+    | '/admin/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/admin/analytics'
+    | '/admin/anti-abuse'
+    | '/admin/editions'
+    | '/admin/results'
+    | '/admin/rounds'
+    | '/admin'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/admin/analytics'
+    | '/admin/anti-abuse'
+    | '/admin/editions'
+    | '/admin/results'
+    | '/admin/rounds'
+    | '/admin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +162,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/rounds': {
+      id: '/admin/rounds'
+      path: '/rounds'
+      fullPath: '/admin/rounds'
+      preLoaderRoute: typeof AdminRoundsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/results': {
+      id: '/admin/results'
+      path: '/results'
+      fullPath: '/admin/results'
+      preLoaderRoute: typeof AdminResultsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/editions': {
+      id: '/admin/editions'
+      path: '/editions'
+      fullPath: '/admin/editions'
+      preLoaderRoute: typeof AdminEditionsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/anti-abuse': {
+      id: '/admin/anti-abuse'
+      path: '/anti-abuse'
+      fullPath: '/admin/anti-abuse'
+      preLoaderRoute: typeof AdminAntiAbuseRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
+  AdminAntiAbuseRoute: typeof AdminAntiAbuseRoute
+  AdminEditionsRoute: typeof AdminEditionsRoute
+  AdminResultsRoute: typeof AdminResultsRoute
+  AdminRoundsRoute: typeof AdminRoundsRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
+  AdminAntiAbuseRoute: AdminAntiAbuseRoute,
+  AdminEditionsRoute: AdminEditionsRoute,
+  AdminResultsRoute: AdminResultsRoute,
+  AdminRoundsRoute: AdminRoundsRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
