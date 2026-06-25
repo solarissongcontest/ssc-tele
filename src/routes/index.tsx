@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles, Vote, Loader2 } from "lucide-react";
 import { PublicShell } from "@/components/public-shell";
+import { VotingBooth } from "@/components/voting-booth";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
@@ -118,37 +119,11 @@ function EmptyRoundCard({ roundName }: { roundName: string }) {
 
 function OpenRoundView({ round }: { round: OpenRound }) {
   return (
-    <section className="space-y-5">
-      <div className="text-center space-y-1">
-        <p className="text-xs uppercase tracking-widest text-primary">
-          Voting open · {round.edition?.name ?? "Solaris"}
-        </p>
-        <h2 className="text-2xl sm:text-3xl font-bold">{round.name}</h2>
-        <p className="text-sm text-muted-foreground">
-          {round.countries.length} nations competing tonight
-        </p>
-      </div>
-
-      <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-        {round.countries.map((c) => (
-          <li
-            key={c.country.code}
-            className="glass rounded-xl px-3 py-3 flex items-center gap-3 hover:ring-1 hover:ring-primary/40 transition"
-          >
-            <span className="text-2xl leading-none">{c.country.flag}</span>
-            <span className="min-w-0">
-              <span className="block text-sm font-medium truncate">{c.country.name}</span>
-              <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">
-                #{c.display_order}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <p className="text-center text-xs text-muted-foreground pt-4">
-        Voting booth UI coming next — countries above are the live lineup.
-      </p>
-    </section>
+    <VotingBooth
+      roundId={round.id}
+      roundName={round.name}
+      editionName={round.edition?.name ?? null}
+      countries={round.countries}
+    />
   );
 }
