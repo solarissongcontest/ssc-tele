@@ -179,7 +179,8 @@ function RoundsPage() {
     mutationFn: async ({ round, status }: { round: Round; status: RoundStatus }) => {
       if (status === "open") {
         const c = counts?.[round.id] ?? 0;
-        if (c !== 26) throw new Error(`Round must have exactly 26 countries (has ${c})`);
+        if (c < 2 || c > 50)
+          throw new Error(`Round must have between 2 and 50 countries (has ${c})`);
       }
       const update: Partial<Round> = { status };
       if (status === "open") update.opened_at = new Date().toISOString();
@@ -189,7 +190,6 @@ function RoundsPage() {
         .update(update as any)
         .eq("id", round.id);
       if (error) {
-        // Unique violation when another round is already open
         if (error.code === "23505") {
           throw new Error("Another round is already open. Close it first.");
         }
@@ -267,7 +267,8 @@ function RoundsPage() {
           <div className="grid gap-3">
             {rounds.map((r) => {
               const c = counts?.[r.id] ?? 0;
-              const canOpen = c === 26 && r.status !== "open";
+              const ok = c >= 2 && c <= 50;
+              const canOpen = ok && r.status !== "open";
               return (
                 <div
                   key={r.id}
@@ -282,10 +283,10 @@ function RoundsPage() {
                           variant="outline"
                           className={cn(
                             "tabular-nums",
-                            c === 26 ? "text-primary border-primary/40" : "text-muted-foreground",
+                            ok ? "text-primary border-primary/40" : "text-muted-foreground",
                           )}
                         >
-                          {c} / 26 countries
+                          {c} {c === 1 ? "country" : "countries"}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
@@ -311,7 +312,7 @@ function RoundsPage() {
                         className="bg-primary text-primary-foreground"
                         disabled={!canOpen || statusMut.isPending}
                         onClick={() => statusMut.mutate({ round: r, status: "open" })}
-                        title={c !== 26 ? "Pick exactly 26 countries first" : ""}
+                        title={!ok ? "Pick between 2 and 50 countries first" : ""}
                       >
                         <PlayCircle className="h-4 w-4" />
                         Open

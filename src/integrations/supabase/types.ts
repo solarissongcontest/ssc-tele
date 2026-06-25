@@ -319,6 +319,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      submit_vote: {
+        Args: {
+          p_country_code: string
+          p_device_token_hash?: string
+          p_entries: Json
+          p_fingerprint_hash?: string
+          p_ip_hash?: string
+          p_round_id: string
+          p_username: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "user"

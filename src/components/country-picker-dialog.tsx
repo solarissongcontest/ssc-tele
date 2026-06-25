@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
-const MAX = 26;
+const MIN = 2;
+const MAX = 50;
 
 type Country = { code: string; name: string; flag: string };
 
@@ -91,6 +92,7 @@ export function CountryPickerDialog({
         toast.error(`Maximum ${MAX} countries`);
         return prev;
       }
+      void MIN;
       return [...prev, code];
     });
   };
@@ -108,7 +110,8 @@ export function CountryPickerDialog({
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!roundId) throw new Error("No round");
-      if (selected.length !== MAX) throw new Error(`Need exactly ${MAX} countries`);
+      if (selected.length < MIN || selected.length > MAX)
+        throw new Error(`Pick between ${MIN} and ${MAX} countries`);
       const { error: delErr } = await supabase
         .from("round_countries")
         .delete()
@@ -133,7 +136,7 @@ export function CountryPickerDialog({
   });
 
   const count = selected.length;
-  const canSave = count === MAX;
+  const canSave = count >= MIN && count <= MAX;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -141,7 +144,7 @@ export function CountryPickerDialog({
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
           <DialogTitle>Configure countries · {roundName}</DialogTitle>
           <DialogDescription>
-            Pick exactly {MAX} countries. Order matters — drag with the arrows.
+            Pick between {MIN} and {MAX} countries. Order matters — use the arrows to reorder.
           </DialogDescription>
         </DialogHeader>
 
@@ -208,7 +211,7 @@ export function CountryPickerDialog({
                   canSave ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
                 )}
               >
-                {count} / {MAX}
+                {count} · {MIN}–{MAX}
               </Badge>
             </div>
             <ScrollArea className="flex-1 max-h-[45vh] md:max-h-[60vh]">
@@ -276,7 +279,7 @@ export function CountryPickerDialog({
             className="bg-hero text-primary-foreground shadow-glow"
           >
             {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Save {count}/{MAX}
+            Save {count} {count === 1 ? "country" : "countries"}
           </Button>
         </DialogFooter>
       </DialogContent>
