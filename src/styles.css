@@ -240,19 +240,12 @@
     0 0 80px -20px oklch(0.80 0.18 180 / 0.35);
   isolation: isolate;
   overflow: hidden;
-}
-@utility glass-strong {
   &::before {
     content: "";
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.22) 0%,
-      rgba(255, 255, 255, 0.05) 30%,
-      rgba(255, 255, 255, 0) 65%
-    );
+    background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.05) 30%, rgba(255,255,255,0) 65%);
     border-radius: inherit;
     z-index: 0;
   }
@@ -262,18 +255,14 @@
     top: 0; left: 0; bottom: 0;
     width: 40%;
     pointer-events: none;
-    background: linear-gradient(
-      100deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.18) 50%,
-      transparent 100%
-    );
+    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
     transform: translateX(-120%) skewX(-12deg);
     animation: liquid-sheen 7s ease-in-out infinite;
     z-index: 0;
   }
   & > * { position: relative; z-index: 1; }
 }
+
 
 @utility glass-button {
   position: relative;
