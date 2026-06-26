@@ -207,10 +207,6 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   isolation: isolate;
   overflow: hidden;
-}
-
-/* Internal top-reflection highlight */
-@utility glass {
   &::before {
     content: "";
     position: absolute;
@@ -227,6 +223,7 @@
   }
   & > * { position: relative; z-index: 1; }
 }
+
 
 @utility glass-strong {
   position: relative;
