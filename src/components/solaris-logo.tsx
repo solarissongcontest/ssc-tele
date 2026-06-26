@@ -18,8 +18,8 @@ export function SolarisLogo({ className }: { className?: string }) {
         <div className="absolute inset-0 blur-md opacity-60 -z-10 bg-hero rounded-full" />
       </div>
       <div className="leading-tight">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Solaris</div>
-        <div className="text-sm font-bold text-gradient -mt-0.5">Song Contest 21</div>
+        <div className="font-logo text-xl text-gradient leading-none">Solaris</div>
+        <div className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground mt-0.5">Song Contest 21</div>
       </div>
     </div>
   );
