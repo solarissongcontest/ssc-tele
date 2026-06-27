@@ -79,8 +79,9 @@ function AnalyticsPage() {
     return Array.from(tot.entries())
       .map(([code, v]) => ({
         code,
-        name: byCode.get(code)?.name ?? code,
+        name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
         flag: byCode.get(code)?.flag ?? "🏳️",
+        country: byCode.get(code) ?? null,
         avg: v.sum / v.count,
         sum: v.sum,
         count: v.count,
@@ -105,14 +106,16 @@ function AnalyticsPage() {
           .slice(0, 3)
           .map(([code, points]) => ({
             code,
-            name: byCode.get(code)?.name ?? code,
+            name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
             flag: byCode.get(code)?.flag ?? "🏳️",
+            country: byCode.get(code) ?? null,
             points,
           }));
         return {
           from,
-          fromName: byCode.get(from)?.name ?? from,
+          fromName: byCode.get(from)?.name ?? UNKNOWN_COUNTRY_NAME,
           fromFlag: byCode.get(from)?.flag ?? "🏳️",
+          fromCountry: byCode.get(from) ?? null,
           top,
         };
       })
