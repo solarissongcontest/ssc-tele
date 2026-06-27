@@ -38,6 +38,9 @@ import {
 } from "@/hooks/use-round-results";
 import { downloadCSV, downloadExcel, downloadJSON } from "@/lib/export";
 import { cn } from "@/lib/utils";
+import { CountryFlag, countryName } from "@/components/country-flag";
+
+type CountryRow = { code: string; name: string; flag: string; flag_url: string | null };
 
 export const Route = createFileRoute("/admin/results")({
   head: () => ({ meta: [{ title: "Results — Solaris Admin" }] }),
