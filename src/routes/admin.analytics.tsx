@@ -18,6 +18,9 @@ import {
   useRoundResults,
 } from "@/hooks/use-round-results";
 import { cn } from "@/lib/utils";
+import { CountryFlag, countryName, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
+
+type CountryRow = { code: string; name: string; flag: string; flag_url: string | null };
 
 export const Route = createFileRoute("/admin/analytics")({
   head: () => ({ meta: [{ title: "Analytics — Solaris Admin" }] }),
