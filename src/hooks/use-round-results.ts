@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type Country = { code: string; name: string; flag: string };
+export type Country = { code: string; name: string; flag: string; flag_url: string | null };
 
 export type Submission = {
   id: string;
