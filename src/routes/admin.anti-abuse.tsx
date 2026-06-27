@@ -71,7 +71,7 @@ function AntiAbusePage() {
   const [q, setQ] = useState("");
 
   const byCode = useMemo(() => {
-    const m = new Map<string, { name: string; flag: string }>();
+    const m = new Map<string, { name: string; flag: string; flag_url: string | null }>();
     (countries ?? []).forEach((c) => m.set(c.code, c));
     return m;
   }, [countries]);
