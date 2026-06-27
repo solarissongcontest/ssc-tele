@@ -327,11 +327,11 @@ function ResultsPage() {
                       <li key={s.id}>
                         <Collapsible>
                           <CollapsibleTrigger className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 text-left hover:bg-card/40 transition">
-                            <span className="text-xl leading-none">{home?.flag ?? "🏳️"}</span>
+                            <CountryFlag country={home} size={24} />
                             <span className="flex-1 min-w-0">
                               <div className="text-sm font-medium truncate">{s.username}</div>
                               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                                {home?.name ?? s.country_code} ·{" "}
+                                {countryName(home)} ·{" "}
                                 {new Date(s.created_at).toLocaleString()}
                               </div>
                             </span>
