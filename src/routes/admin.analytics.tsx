@@ -42,7 +42,7 @@ function AnalyticsPage() {
   const { subs, entries } = useRoundResults(effective);
 
   const byCode = useMemo(() => {
-    const m = new Map<string, { code: string; name: string; flag: string }>();
+    const m = new Map<string, CountryRow>();
     (countries ?? []).forEach((c) => m.set(c.code, c));
     return m;
   }, [countries]);
