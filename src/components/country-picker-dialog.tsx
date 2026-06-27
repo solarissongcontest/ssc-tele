@@ -234,8 +234,8 @@ export function CountryPickerDialog({
                         <span className="w-6 text-xs tabular-nums text-muted-foreground">
                           {i + 1}.
                         </span>
-                        <span className="text-xl leading-none">{c?.flag ?? "🏳️"}</span>
-                        <span className="flex-1 text-sm truncate">{c?.name ?? code}</span>
+                        <CountryFlag country={c} size={22} />
+                        <span className="flex-1 text-sm truncate">{c?.name ?? "Unknown Country"}</span>
                         <Button
                           variant="ghost"
                           size="icon"
