@@ -18,10 +18,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
+import { CountryFlag } from "@/components/country-flag";
+
 const MIN = 2;
 const MAX = 50;
 
-type Country = { code: string; name: string; flag: string };
+type Country = { code: string; name: string; flag: string; flag_url: string | null };
 
 export function CountryPickerDialog({
   open,
