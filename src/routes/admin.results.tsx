@@ -84,8 +84,10 @@ function ResultsPage() {
         const c = byCode.get(code);
         return {
           code,
-          name: c?.name ?? code,
+          name: countryName(c),
           flag: c?.flag ?? "🏳️",
+          flag_url: c?.flag_url ?? null,
+          country: c ?? null,
           points: v.points,
           voters: v.voters.size,
         };
