@@ -230,7 +230,7 @@ function AnalyticsPage() {
                     key={b.from}
                     className="flex items-start gap-3 p-3 rounded-lg bg-card/50 border border-border"
                   >
-                    <span className="text-xl leading-none">{b.fromFlag}</span>
+                    <CountryFlag country={b.fromCountry} size={22} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{b.fromName}</div>
                       <div className="mt-1 flex flex-wrap gap-1.5">
@@ -238,9 +238,10 @@ function AnalyticsPage() {
                           <Badge
                             key={t.code}
                             variant="outline"
-                            className="text-[10px] gap-1"
+                            className="text-[10px] gap-1 inline-flex items-center"
                           >
-                            {t.flag} {t.name}
+                            <CountryFlag country={t.country} size={14} />
+                            {t.name}
                             <span className="text-primary font-semibold tabular-nums">
                               {t.points}
                             </span>
