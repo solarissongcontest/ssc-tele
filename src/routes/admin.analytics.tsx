@@ -59,8 +59,9 @@ function AnalyticsPage() {
     return Array.from(m.entries())
       .map(([code, n]) => ({
         code,
-        name: byCode.get(code)?.name ?? code,
+        name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
         flag: byCode.get(code)?.flag ?? "🏳️",
+        country: byCode.get(code) ?? null,
         n,
       }))
       .sort((a, b) => b.n - a.n);
