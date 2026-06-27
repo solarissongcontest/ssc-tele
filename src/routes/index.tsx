@@ -41,7 +41,7 @@ function PublicHome() {
 
       const { data: rc, error: rcErr } = await supabase
         .from("round_countries")
-        .select("display_order, countries(code,name,flag)")
+        .select("display_order, countries(code,name,flag,flag_url)")
         .eq("round_id", round.id)
         .order("display_order");
       if (rcErr) throw rcErr;
