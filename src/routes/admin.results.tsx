@@ -96,14 +96,19 @@ function ResultsPage() {
   }, [entries.data, subs.data, byCode]);
 
   const entriesBySub = useMemo(() => {
-    const m = new Map<string, { code: string; name: string; flag: string; points: number }[]>();
+    const m = new Map<
+      string,
+      { code: string; name: string; flag: string; flag_url: string | null; country: CountryRow | null; points: number }[]
+    >();
     for (const e of entries.data ?? []) {
       const arr = m.get(e.submission_id) ?? [];
       const c = byCode.get(e.target_country_code);
       arr.push({
         code: e.target_country_code,
-        name: c?.name ?? e.target_country_code,
+        name: countryName(c),
         flag: c?.flag ?? "🏳️",
+        flag_url: c?.flag_url ?? null,
+        country: c ?? null,
         points: e.points,
       });
       m.set(e.submission_id, arr);
