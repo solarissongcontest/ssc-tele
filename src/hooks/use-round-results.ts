@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type Country = { code: string; name: string; flag: string };
+export type Country = { code: string; name: string; flag: string; flag_url: string | null };
 
 export type Submission = {
   id: string;
@@ -54,7 +54,7 @@ export function useAllCountries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("countries")
-        .select("code,name,flag")
+        .select("code,name,flag,flag_url")
         .order("name");
       if (error) throw error;
       return data as Country[];

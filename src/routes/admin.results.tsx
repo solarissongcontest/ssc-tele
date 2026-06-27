@@ -38,6 +38,9 @@ import {
 } from "@/hooks/use-round-results";
 import { downloadCSV, downloadExcel, downloadJSON } from "@/lib/export";
 import { cn } from "@/lib/utils";
+import { CountryFlag, countryName } from "@/components/country-flag";
+
+type CountryRow = { code: string; name: string; flag: string; flag_url: string | null };
 
 export const Route = createFileRoute("/admin/results")({
   head: () => ({ meta: [{ title: "Results — Solaris Admin" }] }),
@@ -59,7 +62,7 @@ function ResultsPage() {
   const { subs, entries } = useRoundResults(effective);
 
   const byCode = useMemo(() => {
-    const m = new Map<string, { code: string; name: string; flag: string }>();
+    const m = new Map<string, CountryRow>();
     (countries ?? []).forEach((c) => m.set(c.code, c));
     return m;
   }, [countries]);
@@ -81,8 +84,10 @@ function ResultsPage() {
         const c = byCode.get(code);
         return {
           code,
-          name: c?.name ?? code,
+          name: countryName(c),
           flag: c?.flag ?? "🏳️",
+          flag_url: c?.flag_url ?? null,
+          country: c ?? null,
           points: v.points,
           voters: v.voters.size,
         };
@@ -91,14 +96,19 @@ function ResultsPage() {
   }, [entries.data, subs.data, byCode]);
 
   const entriesBySub = useMemo(() => {
-    const m = new Map<string, { code: string; name: string; flag: string; points: number }[]>();
+    const m = new Map<
+      string,
+      { code: string; name: string; flag: string; flag_url: string | null; country: CountryRow | null; points: number }[]
+    >();
     for (const e of entries.data ?? []) {
       const arr = m.get(e.submission_id) ?? [];
       const c = byCode.get(e.target_country_code);
       arr.push({
         code: e.target_country_code,
-        name: c?.name ?? e.target_country_code,
+        name: countryName(c),
         flag: c?.flag ?? "🏳️",
+        flag_url: c?.flag_url ?? null,
+        country: c ?? null,
         points: e.points,
       });
       m.set(e.submission_id, arr);
@@ -281,11 +291,11 @@ function ResultsPage() {
                         >
                           {rank}
                         </span>
-                        <span className="text-2xl leading-none">{r.flag}</span>
+                        <CountryFlag country={r.country} size={32} />
                         <span className="flex-1 min-w-0">
                           <div className="text-sm font-medium truncate">{r.name}</div>
                           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {r.voters} {r.voters === 1 ? "voter" : "voters"} · {r.code}
+                            {r.voters} {r.voters === 1 ? "voter" : "voters"}
                           </div>
                         </span>
                         <span className="font-bold tabular-nums text-lg text-primary">
@@ -317,11 +327,11 @@ function ResultsPage() {
                       <li key={s.id}>
                         <Collapsible>
                           <CollapsibleTrigger className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 text-left hover:bg-card/40 transition">
-                            <span className="text-xl leading-none">{home?.flag ?? "🏳️"}</span>
+                            <CountryFlag country={home} size={24} />
                             <span className="flex-1 min-w-0">
                               <div className="text-sm font-medium truncate">{s.username}</div>
                               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                                {home?.name ?? s.country_code} ·{" "}
+                                {countryName(home)} ·{" "}
                                 {new Date(s.created_at).toLocaleString()}
                               </div>
                             </span>
@@ -337,7 +347,7 @@ function ResultsPage() {
                                   key={b.code}
                                   className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-card/60 border border-border"
                                 >
-                                  <span className="text-lg leading-none">{b.flag}</span>
+                                  <CountryFlag country={b.country} size={20} />
                                   <span className="text-xs flex-1 truncate">{b.name}</span>
                                   <span className="text-xs font-bold tabular-nums text-primary">
                                     {b.points}

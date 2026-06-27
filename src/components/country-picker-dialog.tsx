@@ -18,10 +18,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
+import { CountryFlag } from "@/components/country-flag";
+
 const MIN = 2;
 const MAX = 50;
 
-type Country = { code: string; name: string; flag: string };
+type Country = { code: string; name: string; flag: string; flag_url: string | null };
 
 export function CountryPickerDialog({
   open,
@@ -43,7 +45,7 @@ export function CountryPickerDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("countries")
-        .select("code,name,flag")
+        .select("code,name,flag,flag_url")
         .order("name");
       if (error) throw error;
       return data as Country[];
@@ -182,7 +184,7 @@ export function CountryPickerDialog({
                           )}
                         >
                           <Checkbox checked={checked} className="pointer-events-none" />
-                          <span className="text-xl leading-none">{c.flag}</span>
+                          <CountryFlag country={c} size={22} />
                           <span className="flex-1 text-sm truncate">{c.name}</span>
                           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                             {c.code}
@@ -232,8 +234,8 @@ export function CountryPickerDialog({
                         <span className="w-6 text-xs tabular-nums text-muted-foreground">
                           {i + 1}.
                         </span>
-                        <span className="text-xl leading-none">{c?.flag ?? "🏳️"}</span>
-                        <span className="flex-1 text-sm truncate">{c?.name ?? code}</span>
+                        <CountryFlag country={c} size={22} />
+                        <span className="flex-1 text-sm truncate">{c?.name ?? "Unknown Country"}</span>
                         <Button
                           variant="ghost"
                           size="icon"

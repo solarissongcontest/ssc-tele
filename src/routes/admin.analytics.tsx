@@ -18,6 +18,9 @@ import {
   useRoundResults,
 } from "@/hooks/use-round-results";
 import { cn } from "@/lib/utils";
+import { CountryFlag, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
+
+type CountryRow = { code: string; name: string; flag: string; flag_url: string | null };
 
 export const Route = createFileRoute("/admin/analytics")({
   head: () => ({ meta: [{ title: "Analytics — Solaris Admin" }] }),
@@ -39,7 +42,7 @@ function AnalyticsPage() {
   const { subs, entries } = useRoundResults(effective);
 
   const byCode = useMemo(() => {
-    const m = new Map<string, { code: string; name: string; flag: string }>();
+    const m = new Map<string, CountryRow>();
     (countries ?? []).forEach((c) => m.set(c.code, c));
     return m;
   }, [countries]);
@@ -56,8 +59,9 @@ function AnalyticsPage() {
     return Array.from(m.entries())
       .map(([code, n]) => ({
         code,
-        name: byCode.get(code)?.name ?? code,
+        name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
         flag: byCode.get(code)?.flag ?? "🏳️",
+        country: byCode.get(code) ?? null,
         n,
       }))
       .sort((a, b) => b.n - a.n);
@@ -75,8 +79,9 @@ function AnalyticsPage() {
     return Array.from(tot.entries())
       .map(([code, v]) => ({
         code,
-        name: byCode.get(code)?.name ?? code,
+        name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
         flag: byCode.get(code)?.flag ?? "🏳️",
+        country: byCode.get(code) ?? null,
         avg: v.sum / v.count,
         sum: v.sum,
         count: v.count,
@@ -101,14 +106,16 @@ function AnalyticsPage() {
           .slice(0, 3)
           .map(([code, points]) => ({
             code,
-            name: byCode.get(code)?.name ?? code,
+            name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
             flag: byCode.get(code)?.flag ?? "🏳️",
+            country: byCode.get(code) ?? null,
             points,
           }));
         return {
           from,
-          fromName: byCode.get(from)?.name ?? from,
+          fromName: byCode.get(from)?.name ?? UNKNOWN_COUNTRY_NAME,
           fromFlag: byCode.get(from)?.flag ?? "🏳️",
+          fromCountry: byCode.get(from) ?? null,
           top,
         };
       })
@@ -223,7 +230,7 @@ function AnalyticsPage() {
                     key={b.from}
                     className="flex items-start gap-3 p-3 rounded-lg bg-card/50 border border-border"
                   >
-                    <span className="text-xl leading-none">{b.fromFlag}</span>
+                    <CountryFlag country={b.fromCountry} size={22} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{b.fromName}</div>
                       <div className="mt-1 flex flex-wrap gap-1.5">
@@ -231,9 +238,10 @@ function AnalyticsPage() {
                           <Badge
                             key={t.code}
                             variant="outline"
-                            className="text-[10px] gap-1"
+                            className="text-[10px] gap-1 inline-flex items-center"
                           >
-                            {t.flag} {t.name}
+                            <CountryFlag country={t.country} size={14} />
+                            {t.name}
                             <span className="text-primary font-semibold tabular-nums">
                               {t.points}
                             </span>

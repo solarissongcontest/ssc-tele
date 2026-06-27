@@ -16,6 +16,7 @@ import { AdminShell } from "@/components/admin-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { CountryFlag } from "@/components/country-flag";
 import {
   Select,
   SelectContent,
@@ -71,7 +72,7 @@ function AntiAbusePage() {
   const [q, setQ] = useState("");
 
   const byCode = useMemo(() => {
-    const m = new Map<string, { name: string; flag: string }>();
+    const m = new Map<string, { name: string; flag: string; flag_url: string | null }>();
     (countries ?? []).forEach((c) => m.set(c.code, c));
     return m;
   }, [countries]);
@@ -292,8 +293,9 @@ function AntiAbusePage() {
                       <span className="font-semibold text-sm truncate">
                         {e.username ?? "—"}
                       </span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {country?.flag ?? "🏳️"} {country?.name ?? e.country_code ?? "—"}
+                      <Badge variant="outline" className="text-[10px] inline-flex items-center gap-1">
+                        <CountryFlag country={country} size={12} />
+                        {country?.name ?? "Unknown Country"}
                       </Badge>
                       <Badge
                         variant="outline"

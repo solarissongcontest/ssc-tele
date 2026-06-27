@@ -21,7 +21,10 @@ type OpenRound = {
   id: string;
   name: string;
   edition: { name: string } | null;
-  countries: { display_order: number; country: { code: string; name: string; flag: string } }[];
+  countries: {
+    display_order: number;
+    country: { code: string; name: string; flag: string; flag_url: string | null };
+  }[];
 };
 
 function PublicHome() {
@@ -38,7 +41,7 @@ function PublicHome() {
 
       const { data: rc, error: rcErr } = await supabase
         .from("round_countries")
-        .select("display_order, countries(code,name,flag)")
+        .select("display_order, countries(code,name,flag,flag_url)")
         .eq("round_id", round.id)
         .order("display_order");
       if (rcErr) throw rcErr;
