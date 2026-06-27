@@ -21,7 +21,10 @@ type OpenRound = {
   id: string;
   name: string;
   edition: { name: string } | null;
-  countries: { display_order: number; country: { code: string; name: string; flag: string } }[];
+  countries: {
+    display_order: number;
+    country: { code: string; name: string; flag: string; flag_url: string | null };
+  }[];
 };
 
 function PublicHome() {
