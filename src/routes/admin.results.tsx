@@ -291,11 +291,11 @@ function ResultsPage() {
                         >
                           {rank}
                         </span>
-                        <span className="text-2xl leading-none">{r.flag}</span>
+                        <CountryFlag country={r.country} size={32} />
                         <span className="flex-1 min-w-0">
                           <div className="text-sm font-medium truncate">{r.name}</div>
                           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {r.voters} {r.voters === 1 ? "voter" : "voters"} · {r.code}
+                            {r.voters} {r.voters === 1 ? "voter" : "voters"}
                           </div>
                         </span>
                         <span className="font-bold tabular-nums text-lg text-primary">
