@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, Minus, Plus, Vote, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,10 +19,18 @@ import {
   hasSubmittedRound,
   markRoundSubmitted,
 } from "@/lib/anti-abuse";
+import { CountryFlag, countryName } from "@/components/country-flag";
+
+type CountryShape = {
+  code: string;
+  name: string;
+  flag: string;
+  flag_url: string | null;
+};
 
 export type RoundCountry = {
   display_order: number;
-  country: { code: string; name: string; flag: string };
+  country: CountryShape;
 };
 
 type Stage = "register" | "vote" | "done";
@@ -53,15 +61,34 @@ export function VotingBooth({
     breakdown: { code: string; points: number }[];
   } | null>(null);
 
+  // Full Solaris country library — used for the registration dropdown,
+  // because a voter may come from ANY Solaris country, even one not
+  // competing in the current round.
+  const { data: allCountries } = useQuery({
+    queryKey: ["solaris-countries"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("countries")
+        .select("code,name,flag,flag_url")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as CountryShape[];
+    },
+    staleTime: 60_000,
+  });
+
   const sorted = useMemo(
     () => [...countries].sort((a, b) => a.display_order - b.display_order),
     [countries],
   );
+
+  // Resolve any country code (round or non-round) to a Country record.
   const byCode = useMemo(() => {
-    const m = new Map<string, RoundCountry["country"]>();
+    const m = new Map<string, CountryShape>();
+    (allCountries ?? []).forEach((c) => m.set(c.code, c));
     sorted.forEach((c) => m.set(c.country.code, c.country));
     return m;
-  }, [sorted]);
+  }, [allCountries, sorted]);
 
   const used = Object.values(points).reduce((a, b) => a + b, 0);
   const remaining = TOTAL - used;
@@ -157,16 +184,19 @@ export function VotingBooth({
                 <SelectValue placeholder="Select your country…" />
               </SelectTrigger>
               <SelectContent className="max-h-[50vh]">
-                {sorted.map((c) => (
-                  <SelectItem key={c.country.code} value={c.country.code}>
-                    <span className="mr-2">{c.country.flag}</span>
-                    {c.country.name}
+                {(allCountries ?? []).map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    <span className="inline-flex items-center gap-2">
+                      <CountryFlag country={c} size={18} />
+                      {c.name}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              You cannot vote for your own country.
+              All {allCountries?.length ?? 0} Solaris nations are listed — even those not
+              competing in this round. You cannot vote for your own country.
             </p>
           </div>
         </div>
@@ -198,6 +228,7 @@ export function VotingBooth({
   };
 
   const canSubmit = used === TOTAL && countriesUsed >= MIN_COUNTRIES;
+  const homeCountry = byCode.get(home);
 
   return (
     <section className="space-y-5">
@@ -208,9 +239,10 @@ export function VotingBooth({
               {editionName ? `${editionName} · ` : ""}
               {roundName}
             </p>
-            <p className="text-sm font-semibold truncate">
+            <p className="text-sm font-semibold truncate inline-flex items-center gap-1.5">
               Voting as <span className="text-primary">{username}</span> ·{" "}
-              {byCode.get(home)?.flag} {byCode.get(home)?.name}
+              <CountryFlag country={homeCountry} size={16} />
+              {countryName(homeCountry)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -255,11 +287,11 @@ export function VotingBooth({
                 p > 0 && "ring-1 ring-primary/40",
               )}
             >
-              <span className="text-2xl leading-none shrink-0">{c.country.flag}</span>
+              <CountryFlag country={c.country} size={32} />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{c.country.name}</div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  #{c.display_order} · {code}
+                  #{c.display_order}
                   {isHome ? " · your country" : ""}
                 </div>
               </div>
@@ -329,8 +361,9 @@ function DoneCard({
   confirmation:
     | { username: string; home: string; breakdown: { code: string; points: number }[] }
     | null;
-  byCode: Map<string, { code: string; name: string; flag: string }>;
+  byCode: Map<string, CountryShape>;
 }) {
+  const homeCountry = confirmation ? byCode.get(confirmation.home) : null;
   return (
     <section className="glass-strong rounded-2xl p-6 sm:p-8 max-w-xl mx-auto space-y-5 text-center">
       <div className="mx-auto h-14 w-14 rounded-2xl bg-hero grid place-items-center shadow-glow">
@@ -349,9 +382,9 @@ function DoneCard({
 
       {confirmation && (
         <div className="text-left space-y-3">
-          <div className="text-xs text-muted-foreground">
-            {confirmation.username} · {byCode.get(confirmation.home)?.flag}{" "}
-            {byCode.get(confirmation.home)?.name ?? confirmation.home}
+          <div className="text-xs text-muted-foreground inline-flex items-center gap-2">
+            {confirmation.username} · <CountryFlag country={homeCountry} size={16} />
+            {countryName(homeCountry)}
           </div>
           <ul className="space-y-1.5">
             {confirmation.breakdown.map((b) => {
@@ -361,8 +394,8 @@ function DoneCard({
                   key={b.code}
                   className="flex items-center gap-3 px-3 py-2 rounded-lg bg-card/60 border border-border"
                 >
-                  <span className="text-xl">{c?.flag ?? "🏳️"}</span>
-                  <span className="flex-1 text-sm truncate">{c?.name ?? b.code}</span>
+                  <CountryFlag country={c} size={28} />
+                  <span className="flex-1 text-sm truncate">{countryName(c)}</span>
                   <span className="font-bold tabular-nums text-primary">{b.points}</span>
                 </li>
               );
