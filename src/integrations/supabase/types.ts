@@ -74,16 +74,19 @@ export type Database = {
         Row: {
           code: string
           flag: string
+          flag_url: string | null
           name: string
         }
         Insert: {
           code: string
           flag: string
+          flag_url?: string | null
           name: string
         }
         Update: {
           code?: string
           flag?: string
+          flag_url?: string | null
           name?: string
         }
         Relationships: []
