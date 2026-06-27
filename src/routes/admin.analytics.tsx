@@ -18,7 +18,7 @@ import {
   useRoundResults,
 } from "@/hooks/use-round-results";
 import { cn } from "@/lib/utils";
-import { CountryFlag, countryName, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
+import { CountryFlag, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
 
 type CountryRow = { code: string; name: string; flag: string; flag_url: string | null };
 
