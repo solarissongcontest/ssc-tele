@@ -184,7 +184,7 @@ export function CountryPickerDialog({
                           )}
                         >
                           <Checkbox checked={checked} className="pointer-events-none" />
-                          <span className="text-xl leading-none">{c.flag}</span>
+                          <CountryFlag country={c} size={22} />
                           <span className="flex-1 text-sm truncate">{c.name}</span>
                           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                             {c.code}
