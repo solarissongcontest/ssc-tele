@@ -347,7 +347,7 @@ function ResultsPage() {
                                   key={b.code}
                                   className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-card/60 border border-border"
                                 >
-                                  <span className="text-lg leading-none">{b.flag}</span>
+                                  <CountryFlag country={b.country} size={20} />
                                   <span className="text-xs flex-1 truncate">{b.name}</span>
                                   <span className="text-xs font-bold tabular-nums text-primary">
                                     {b.points}
