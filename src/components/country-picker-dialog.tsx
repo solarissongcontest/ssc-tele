@@ -45,7 +45,7 @@ export function CountryPickerDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("countries")
-        .select("code,name,flag")
+        .select("code,name,flag,flag_url")
         .order("name");
       if (error) throw error;
       return data as Country[];
