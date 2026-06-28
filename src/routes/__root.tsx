@@ -118,6 +118,8 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeApplier />
+      <StarfieldBackground />
       <Outlet />
       <Toaster richColors position="top-center" theme="dark" />
     </QueryClientProvider>
