@@ -26,6 +26,7 @@ const NAV = [
   { to: "/admin/results", label: "Results", icon: Trophy },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/anti-abuse", label: "Anti-Abuse", icon: ShieldAlert },
+  { to: "/admin/theme", label: "Theme", icon: Palette },
 ] as const;
 
 function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
