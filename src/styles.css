@@ -137,6 +137,11 @@
   --sidebar-border: oklch(1 0 0 / 0.18);
   --sidebar-ring: oklch(0.80 0.16 180);
 
+  /* Default tint for glass panels — themable via admin */
+  --card-tint: rgba(12, 22, 40, 0.10);
+
+
+
   --gradient-stage:
     radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.50 0.20 180 / 0.55), transparent 60%),
     radial-gradient(ellipse 65% 55% at 85% 110%, oklch(0.55 0.22 155 / 0.40), transparent 60%),
@@ -195,16 +200,17 @@
 
 @utility glass {
   position: relative;
-  background: rgba(12, 22, 40, 0.18);
-  backdrop-filter: blur(36px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--card-tint, rgba(12, 22, 40, 0.10));
+  backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: var(--radius);
   box-shadow:
-    0 8px 40px rgba(0, 0, 0, 0.35),
+    0 10px 40px rgba(0, 0, 0, 0.35),
     0 30px 80px -24px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    inset 0 1px 0 rgba(255, 255, 255, 0.50),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
+    inset 1px 0 0 rgba(255, 255, 255, 0.14),
+    inset -1px 0 0 rgba(255, 255, 255, 0.10);
   isolation: isolate;
   overflow: hidden;
   &::before {
@@ -212,12 +218,9 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.18) 0%,
-      rgba(255, 255, 255, 0.04) 28%,
-      rgba(255, 255, 255, 0) 60%
-    );
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 32%, rgba(255,255,255,0) 65%),
+      radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,0.16), transparent 60%);
     border-radius: inherit;
     z-index: 0;
   }
@@ -227,17 +230,18 @@
 
 @utility glass-strong {
   position: relative;
-  background: rgba(12, 22, 40, 0.28);
-  backdrop-filter: blur(40px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: var(--card-tint, rgba(12, 22, 40, 0.14));
+  backdrop-filter: blur(48px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: var(--radius);
   box-shadow:
-    0 12px 50px rgba(0, 0, 0, 0.45),
+    0 14px 55px rgba(0, 0, 0, 0.45),
     0 40px 100px -30px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.40),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 0 80px -20px oklch(0.80 0.18 180 / 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 1px 0 0 rgba(255, 255, 255, 0.18),
+    inset -1px 0 0 rgba(255, 255, 255, 0.12),
+    0 0 80px -20px var(--glow, oklch(0.80 0.18 180 / 0.35));
   isolation: isolate;
   overflow: hidden;
   &::before {
@@ -245,7 +249,9 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.05) 30%, rgba(255,255,255,0) 65%);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 32%, rgba(255,255,255,0) 65%),
+      radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,0.20), transparent 60%);
     border-radius: inherit;
     z-index: 0;
   }
@@ -255,9 +261,9 @@
     top: 0; left: 0; bottom: 0;
     width: 40%;
     pointer-events: none;
-    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.20) 50%, transparent 100%);
     transform: translateX(-120%) skewX(-12deg);
-    animation: liquid-sheen 7s ease-in-out infinite;
+    animation: liquid-sheen 9s ease-in-out infinite;
     z-index: 0;
   }
   & > * { position: relative; z-index: 1; }
@@ -266,13 +272,13 @@
 
 @utility glass-button {
   position: relative;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(22px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    0 4px 18px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10);
   transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
   isolation: isolate;
   overflow: hidden;
@@ -281,52 +287,52 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 55%);
+    background: linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0) 55%);
     border-radius: inherit;
   }
   &:hover {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.16);
     box-shadow:
       0 6px 22px rgba(0, 0, 0, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.10),
-      0 0 30px -6px oklch(0.80 0.18 180 / 0.45);
+      inset 0 1px 0 rgba(255, 255, 255, 0.60),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+      0 0 30px -6px var(--glow, oklch(0.80 0.18 180 / 0.45));
   }
 }
 
 
 /* Make Card/components inherit the glass when they use bg-card */
 [class*="bg-card"]:not([class*="bg-card/"]) {
-  background: rgba(12, 22, 40, 0.18) !important;
-  backdrop-filter: blur(36px) saturate(180%);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: var(--card-tint, rgba(12, 22, 40, 0.10)) !important;
+  backdrop-filter: blur(40px) saturate(200%);
+  border-color: rgba(255, 255, 255, 0.28);
   box-shadow:
-    0 8px 40px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    0 10px 40px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.50),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10);
 }
 
 /* Apply Liquid Glass to Radix popovers/dialogs */
 [data-radix-popper-content-wrapper] > * {
-  background: rgba(12, 22, 40, 0.28) !important;
-  backdrop-filter: blur(36px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  background: rgba(12, 22, 40, 0.18) !important;
+  backdrop-filter: blur(40px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.30) !important;
   box-shadow:
-    0 12px 50px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08) !important;
+    0 14px 55px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.50),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10) !important;
 }
 
 [role="dialog"][data-state="open"],
 [role="alertdialog"][data-state="open"] {
-  background: rgba(12, 22, 40, 0.30) !important;
-  backdrop-filter: blur(40px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.26) !important;
+  background: rgba(12, 22, 40, 0.20) !important;
+  backdrop-filter: blur(48px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.32) !important;
   box-shadow:
-    0 12px 50px rgba(0, 0, 0, 0.50),
+    0 14px 55px rgba(0, 0, 0, 0.50),
     0 40px 100px -30px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.40),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.10) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12) !important;
 }
 
 @utility text-gradient {
