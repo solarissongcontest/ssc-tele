@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   LogOut,
   Menu,
+  Palette,
   X,
 } from "lucide-react";
 import { SolarisLogo } from "./solaris-logo";
