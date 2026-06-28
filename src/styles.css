@@ -137,6 +137,11 @@
   --sidebar-border: oklch(1 0 0 / 0.18);
   --sidebar-ring: oklch(0.80 0.16 180);
 
+  /* Default tint for glass panels — themable via admin */
+  --card-tint: rgba(12, 22, 40, 0.10);
+
+
+
   --gradient-stage:
     radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.50 0.20 180 / 0.55), transparent 60%),
     radial-gradient(ellipse 65% 55% at 85% 110%, oklch(0.55 0.22 155 / 0.40), transparent 60%),
