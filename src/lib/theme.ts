@@ -28,7 +28,7 @@ export const DEFAULT_THEME: ThemeTokens = {
   accent: "oklch(0.72 0.18 155)",
   destructive: "oklch(0.65 0.22 25)",
   success: "oklch(0.72 0.17 160)",
-  cardTint: "rgba(12, 22, 40, 0.12)",
+  cardTint: "rgba(230, 245, 255, 0.028)",
   glow: "oklch(0.80 0.18 180)",
   gradientStage: [
     "radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.50 0.20 180 / 0.55), transparent 60%)",
@@ -41,6 +41,12 @@ export const DEFAULT_THEME: ThemeTokens = {
     "linear-gradient(135deg, oklch(0.82 0.16 180), oklch(0.74 0.18 155))",
 };
 
+const LEGACY_OPAQUE_CARD_TINTS = new Set([
+  "rgba(12, 22, 40, 0.12)",
+  "rgba(230, 240, 255, 0.10)",
+  "rgba(230, 240, 255, 0.14)",
+]);
+
 const STORAGE_KEY = "solaris.theme.v1";
 
 export function loadTheme(): ThemeTokens {
@@ -49,7 +55,11 @@ export function loadTheme(): ThemeTokens {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_THEME;
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_THEME, ...parsed };
+    const theme = { ...DEFAULT_THEME, ...parsed };
+    if (LEGACY_OPAQUE_CARD_TINTS.has(String(theme.cardTint).trim())) {
+      theme.cardTint = DEFAULT_THEME.cardTint;
+    }
+    return theme;
   } catch {
     return DEFAULT_THEME;
   }
@@ -82,6 +92,7 @@ export function applyTheme(theme: ThemeTokens) {
   r.setProperty("--glow", theme.glow);
   r.setProperty("--ring", theme.primary);
   r.setProperty("--card-tint", theme.cardTint);
+  r.setProperty("--glass-tint-strong", "rgba(230, 245, 255, 0.045)");
   r.setProperty("--gradient-stage", theme.gradientStage);
   r.setProperty("--gradient-hero", theme.gradientHero);
 }
