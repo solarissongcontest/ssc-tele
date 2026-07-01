@@ -92,75 +92,74 @@
 
 /* SSC21 Solaris Song Contest — dark stage, blue/teal/green glow */
 :root {
-  --radius: 1rem;
+  --radius: 1.75rem;
   --background: oklch(0.16 0.04 230);
   --foreground: oklch(0.98 0.01 220);
 
   --stage: oklch(0.12 0.05 235);
   --stage-foreground: oklch(0.97 0.01 220);
 
-  /* Cards/popovers as translucent veils only; real fill comes from the glass utility */
-  --card: oklch(0.18 0.05 232 / 0.22);
-  --card-foreground: oklch(0.98 0.01 220);
-  --popover: oklch(0.14 0.05 232 / 0.28);
-  --popover-foreground: oklch(0.98 0.01 220);
+  /* Milky Liquid Glass — mostly white with faint blue tint, very transparent */
+  --card: rgba(255, 255, 255, 0.10);
+  --card-foreground: oklch(0.99 0.01 220);
+  --popover: rgba(255, 255, 255, 0.12);
+  --popover-foreground: oklch(0.99 0.01 220);
 
-  --primary: oklch(0.80 0.16 180);
-  --primary-foreground: oklch(0.12 0.05 230);
+  --primary: oklch(0.82 0.14 195);
+  --primary-foreground: oklch(0.14 0.05 230);
 
-  --secondary: oklch(0.30 0.08 220 / 0.40);
-  --secondary-foreground: oklch(0.97 0.01 220);
+  --secondary: rgba(255, 255, 255, 0.10);
+  --secondary-foreground: oklch(0.98 0.01 220);
 
-  --muted: oklch(0.25 0.04 230 / 0.35);
-  --muted-foreground: oklch(0.80 0.04 220);
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: oklch(0.82 0.03 220);
 
-  --accent: oklch(0.72 0.18 155);
-  --accent-foreground: oklch(0.12 0.05 230);
+  --accent: oklch(0.75 0.16 165);
+  --accent-foreground: oklch(0.14 0.05 230);
 
-  --destructive: oklch(0.65 0.22 25);
+  --destructive: oklch(0.66 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.72 0.17 160);
+  --success: oklch(0.75 0.17 160);
   --success-foreground: oklch(0.12 0.05 230);
 
-  --border: oklch(1 0 0 / 0.22);
-  --input: oklch(1 0 0 / 0.10);
-  --ring: oklch(0.80 0.16 180);
+  --border: rgba(255, 255, 255, 0.28);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: oklch(0.85 0.14 190);
 
-  --glow: oklch(0.80 0.18 180);
+  --glow: oklch(0.85 0.16 190);
 
-  --sidebar: oklch(0.13 0.05 232 / 0.30);
-  --sidebar-foreground: oklch(0.94 0.02 220);
-  --sidebar-primary: oklch(0.80 0.16 180);
-  --sidebar-primary-foreground: oklch(0.12 0.05 230);
-  --sidebar-accent: oklch(0.30 0.08 232 / 0.35);
-  --sidebar-accent-foreground: oklch(0.97 0.01 220);
-  --sidebar-border: oklch(1 0 0 / 0.18);
-  --sidebar-ring: oklch(0.80 0.16 180);
+  --sidebar: rgba(255, 255, 255, 0.08);
+  --sidebar-foreground: oklch(0.96 0.02 220);
+  --sidebar-primary: oklch(0.82 0.14 195);
+  --sidebar-primary-foreground: oklch(0.14 0.05 230);
+  --sidebar-accent: rgba(255, 255, 255, 0.10);
+  --sidebar-accent-foreground: oklch(0.98 0.01 220);
+  --sidebar-border: rgba(255, 255, 255, 0.22);
+  --sidebar-ring: oklch(0.85 0.14 190);
 
-  /* Default tint for glass panels — themable via admin */
-  --card-tint: rgba(12, 22, 40, 0.10);
-
-
+  /* Liquid Glass tint — milky bluish-white, ~10-14% */
+  --card-tint: rgba(230, 240, 255, 0.10);
+  --glass-tint-strong: rgba(230, 240, 255, 0.14);
 
   --gradient-stage:
-    radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.50 0.20 180 / 0.55), transparent 60%),
-    radial-gradient(ellipse 65% 55% at 85% 110%, oklch(0.55 0.22 155 / 0.40), transparent 60%),
-    radial-gradient(ellipse 65% 55% at 5% 100%, oklch(0.42 0.18 245 / 0.45), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, oklch(0.35 0.14 200 / 0.25), transparent 70%),
-    linear-gradient(180deg, oklch(0.10 0.05 235), oklch(0.08 0.05 245));
-  --gradient-hero: linear-gradient(135deg, oklch(0.82 0.16 180), oklch(0.74 0.18 155));
+    radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.55 0.22 190 / 0.55), transparent 60%),
+    radial-gradient(ellipse 65% 55% at 85% 110%, oklch(0.58 0.22 155 / 0.42), transparent 60%),
+    radial-gradient(ellipse 65% 55% at 5% 100%, oklch(0.45 0.20 250 / 0.48), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, oklch(0.36 0.14 205 / 0.28), transparent 70%),
+    linear-gradient(180deg, oklch(0.09 0.05 235), oklch(0.07 0.05 245));
+  --gradient-hero: linear-gradient(135deg, oklch(0.85 0.15 195), oklch(0.76 0.17 160));
 
-  /* Apple Liquid Glass shadow stack — floating, layered, edge-lit */
+  /* Liquid Glass shadow — deep soft ambient float */
   --shadow-liquid:
-    0 8px 40px rgba(0, 0, 0, 0.35),
-    0 30px 80px -20px rgba(0, 0, 0, 0.45),
-    0 2px 6px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 -1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 2px 8px rgba(0, 0, 0, 0.18),
+    0 24px 60px -12px rgba(0, 0, 0, 0.45),
+    0 40px 100px -30px rgba(0, 0, 0, 0.55);
   --shadow-glow:
-    0 0 80px -10px oklch(0.80 0.18 180 / 0.45),
-    0 10px 40px -10px rgba(0, 0, 0, 0.6);
+    0 0 90px -10px oklch(0.85 0.18 190 / 0.55),
+    0 12px 40px -10px rgba(0, 0, 0, 0.55);
   --shadow-card: var(--shadow-liquid);
 }
 
@@ -188,29 +187,35 @@
 }
 
 /* =========================================================
-   Apple Liquid Glass — pronounced translucency + edge light
+   Apple Liquid Glass — thick milky droplets with refractive rim
    ========================================================= */
 
 @keyframes liquid-sheen {
-  0%   { transform: translateX(-120%) skewX(-12deg); opacity: 0; }
-  20%  { opacity: 0.55; }
-  60%  { opacity: 0.35; }
-  100% { transform: translateX(220%) skewX(-12deg); opacity: 0; }
+  0%   { transform: translateX(-140%) skewX(-14deg); opacity: 0; }
+  15%  { opacity: 0.55; }
+  70%  { opacity: 0.25; }
+  100% { transform: translateX(240%) skewX(-14deg); opacity: 0; }
 }
 
+/* Shared droplet material — used by .glass, .glass-strong, cards, buttons */
 @utility glass {
   position: relative;
-  background: var(--card-tint, rgba(12, 22, 40, 0.10));
-  backdrop-filter: blur(40px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.04) 55%, rgba(200,225,255,0.08) 100%),
+    var(--card-tint, rgba(230, 240, 255, 0.10));
+  backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
+  -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 28px;
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.35),
-    0 30px 80px -24px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.50),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
     inset 0 -1px 0 rgba(255, 255, 255, 0.10),
-    inset 1px 0 0 rgba(255, 255, 255, 0.14),
-    inset -1px 0 0 rgba(255, 255, 255, 0.10);
+    inset 1px 0 0 rgba(255, 255, 255, 0.18),
+    inset -1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 30px rgba(255, 255, 255, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    0 24px 60px -14px rgba(0, 0, 0, 0.40),
+    0 40px 90px -30px rgba(0, 0, 0, 0.50);
   isolation: isolate;
   overflow: hidden;
   &::before {
@@ -219,29 +224,45 @@
     inset: 0;
     pointer-events: none;
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 32%, rgba(255,255,255,0) 65%),
-      radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,0.16), transparent 60%);
+      radial-gradient(120% 70% at 30% -10%, rgba(255,255,255,0.30), transparent 55%),
+      linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.02) 40%, rgba(255,255,255,0) 70%);
     border-radius: inherit;
+    z-index: 0;
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.10),
+      inset 0 0 40px rgba(140, 200, 255, 0.10);
+    background: radial-gradient(80% 40% at 80% 110%, rgba(120, 200, 255, 0.10), transparent 60%);
     z-index: 0;
   }
   & > * { position: relative; z-index: 1; }
 }
 
-
 @utility glass-strong {
   position: relative;
-  background: var(--card-tint, rgba(12, 22, 40, 0.14));
-  backdrop-filter: blur(48px) saturate(210%);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 50%, rgba(200,225,255,0.10) 100%),
+    var(--glass-tint-strong, rgba(230, 240, 255, 0.14));
+  backdrop-filter: blur(40px) saturate(190%) brightness(1.06);
+  -webkit-backdrop-filter: blur(40px) saturate(190%) brightness(1.06);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 32px;
   box-shadow:
-    0 14px 55px rgba(0, 0, 0, 0.45),
-    0 40px 100px -30px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 2px 0 rgba(255, 255, 255, 0.60),
     inset 0 -1px 0 rgba(255, 255, 255, 0.12),
-    inset 1px 0 0 rgba(255, 255, 255, 0.18),
-    inset -1px 0 0 rgba(255, 255, 255, 0.12),
-    0 0 80px -20px var(--glow, oklch(0.80 0.18 180 / 0.35));
+    inset 1.5px 0 0 rgba(255, 255, 255, 0.22),
+    inset -1.5px 0 0 rgba(255, 255, 255, 0.15),
+    inset 0 0 40px rgba(255, 255, 255, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.18),
+    0 30px 80px -18px rgba(0, 0, 0, 0.45),
+    0 50px 120px -30px rgba(0, 0, 0, 0.55),
+    0 0 90px -20px var(--glow, oklch(0.85 0.16 190 / 0.45));
   isolation: isolate;
   overflow: hidden;
   &::before {
@@ -250,8 +271,8 @@
     inset: 0;
     pointer-events: none;
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 32%, rgba(255,255,255,0) 65%),
-      radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,0.20), transparent 60%);
+      radial-gradient(130% 75% at 30% -15%, rgba(255,255,255,0.36), transparent 55%),
+      linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.03) 42%, rgba(255,255,255,0) 70%);
     border-radius: inherit;
     z-index: 0;
   }
@@ -259,27 +280,32 @@
     content: "";
     position: absolute;
     top: 0; left: 0; bottom: 0;
-    width: 40%;
+    width: 45%;
     pointer-events: none;
-    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.20) 50%, transparent 100%);
-    transform: translateX(-120%) skewX(-12deg);
-    animation: liquid-sheen 9s ease-in-out infinite;
+    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.22) 50%, transparent 100%);
+    transform: translateX(-140%) skewX(-14deg);
+    animation: liquid-sheen 11s ease-in-out infinite;
     z-index: 0;
   }
   & > * { position: relative; z-index: 1; }
 }
 
-
 @utility glass-button {
   position: relative;
-  background: rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(22px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.06) 55%, rgba(200,225,255,0.10)),
+    rgba(230, 240, 255, 0.10);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 9999px;
   box-shadow:
-    0 4px 18px rgba(0, 0, 0, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.10);
-  transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 20px rgba(255, 255, 255, 0.06),
+    0 4px 14px rgba(0, 0, 0, 0.25),
+    0 12px 30px -10px rgba(0, 0, 0, 0.35);
+  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease;
   isolation: isolate;
   overflow: hidden;
   &::before {
@@ -287,53 +313,174 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0) 55%);
     border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255,255,255,0.35), rgba(255,255,255,0) 50%);
   }
   &:hover {
-    background: rgba(255, 255, 255, 0.16);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.08) 55%, rgba(200,225,255,0.14)),
+      rgba(230, 240, 255, 0.14);
+    transform: scale(1.02);
     box-shadow:
-      0 6px 22px rgba(0, 0, 0, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.60),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.12),
-      0 0 30px -6px var(--glow, oklch(0.80 0.18 180 / 0.45));
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.14),
+      0 6px 18px rgba(0, 0, 0, 0.30),
+      0 16px 40px -10px rgba(0, 0, 0, 0.40),
+      0 0 40px -6px var(--glow, oklch(0.85 0.16 190 / 0.55));
   }
+  &:active { transform: scale(0.98); }
 }
 
+/* ---------- Global component adoption of Liquid Glass ---------- */
 
-/* Make Card/components inherit the glass when they use bg-card */
+/* Cards / anything using bg-card become droplet glass */
 [class*="bg-card"]:not([class*="bg-card/"]) {
-  background: var(--card-tint, rgba(12, 22, 40, 0.10)) !important;
-  backdrop-filter: blur(40px) saturate(200%);
-  border-color: rgba(255, 255, 255, 0.28);
-  box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.50),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.10);
-}
-
-/* Apply Liquid Glass to Radix popovers/dialogs */
-[data-radix-popper-content-wrapper] > * {
-  background: rgba(12, 22, 40, 0.18) !important;
-  backdrop-filter: blur(40px) saturate(210%);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04) 55%, rgba(200,225,255,0.08)),
+    var(--card-tint, rgba(230, 240, 255, 0.10)) !important;
+  backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
+  -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
   border: 1px solid rgba(255, 255, 255, 0.30) !important;
+  border-radius: 28px !important;
   box-shadow:
-    0 14px 55px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.50),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.10) !important;
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 0 30px rgba(255, 255, 255, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    0 24px 60px -14px rgba(0, 0, 0, 0.40) !important;
 }
 
+/* Radix popovers, dropdowns, selects, hovercards */
+[data-radix-popper-content-wrapper] > * {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04) 55%, rgba(200,225,255,0.10)),
+    rgba(230, 240, 255, 0.12) !important;
+  backdrop-filter: blur(36px) saturate(190%) brightness(1.05);
+  -webkit-backdrop-filter: blur(36px) saturate(190%) brightness(1.05);
+  border: 1px solid rgba(255, 255, 255, 0.34) !important;
+  border-radius: 22px !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
+    0 4px 12px rgba(0, 0, 0, 0.20),
+    0 30px 80px -18px rgba(0, 0, 0, 0.50) !important;
+  color: var(--foreground) !important;
+}
+
+/* Dialogs / alert dialogs */
 [role="dialog"][data-state="open"],
 [role="alertdialog"][data-state="open"] {
-  background: rgba(12, 22, 40, 0.20) !important;
-  backdrop-filter: blur(48px) saturate(210%);
-  border: 1px solid rgba(255, 255, 255, 0.32) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.05) 50%, rgba(200,225,255,0.10)),
+    rgba(230, 240, 255, 0.14) !important;
+  backdrop-filter: blur(44px) saturate(200%) brightness(1.06);
+  -webkit-backdrop-filter: blur(44px) saturate(200%) brightness(1.06);
+  border: 1px solid rgba(255, 255, 255, 0.36) !important;
+  border-radius: 32px !important;
   box-shadow:
-    0 14px 55px rgba(0, 0, 0, 0.50),
-    0 40px 100px -30px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.12) !important;
+    inset 0 2px 0 rgba(255, 255, 255, 0.60),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    0 30px 80px -18px rgba(0, 0, 0, 0.50),
+    0 50px 120px -30px rgba(0, 0, 0, 0.60) !important;
 }
+
+/* Buttons — default primary becomes tinted liquid glass */
+button.bg-primary,
+[class*=" bg-primary"]:not([class*="bg-primary/"]):is(button, a, [role="button"]),
+.bg-primary:is(button, a, [role="button"]) {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0.06) 55%),
+    linear-gradient(135deg, oklch(0.85 0.15 195 / 0.55), oklch(0.76 0.17 160 / 0.55)) !important;
+  backdrop-filter: blur(22px) saturate(190%);
+  -webkit-backdrop-filter: blur(22px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.42) !important;
+  border-radius: 9999px !important;
+  color: oklch(0.14 0.05 230) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 0 20px rgba(255, 255, 255, 0.10),
+    0 6px 18px rgba(0, 0, 0, 0.28),
+    0 14px 38px -10px rgba(0, 0, 0, 0.40),
+    0 0 30px -6px oklch(0.85 0.16 190 / 0.35) !important;
+  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease;
+}
+button.bg-primary:hover,
+[class*=" bg-primary"]:is(button, a, [role="button"]):hover {
+  transform: scale(1.02);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 22px rgba(0, 0, 0, 0.32),
+    0 18px 44px -10px rgba(0, 0, 0, 0.45),
+    0 0 44px -4px oklch(0.85 0.16 190 / 0.60) !important;
+}
+button.bg-primary:active { transform: scale(0.98); }
+
+/* Secondary / outline / ghost buttons — neutral milky glass pill */
+button.bg-secondary,
+button[class*="bg-background"],
+button.border.border-input,
+[class*="bg-secondary"]:is(button, a, [role="button"]) {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.05) 55%),
+    rgba(230, 240, 255, 0.08) !important;
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.34) !important;
+  border-radius: 9999px !important;
+  color: var(--foreground) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.60),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
+    0 4px 14px rgba(0, 0, 0, 0.22),
+    0 10px 26px -8px rgba(0, 0, 0, 0.30) !important;
+  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease;
+}
+button.bg-secondary:hover,
+[class*="bg-secondary"]:is(button, a, [role="button"]):hover {
+  transform: scale(1.02);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.08) 55%),
+    rgba(230, 240, 255, 0.12) !important;
+}
+
+/* Inputs & textareas — recessed liquid capsules */
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]),
+textarea,
+select {
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.10), rgba(255,255,255,0.04)),
+    rgba(230, 240, 255, 0.06) !important;
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.08);
+  color: var(--foreground);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none !important;
+  border-color: rgba(255, 255, 255, 0.55) !important;
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 0 0 3px oklch(0.85 0.14 190 / 0.35),
+    0 0 30px -4px oklch(0.85 0.16 190 / 0.45) !important;
+}
+
+/* Rounded pill helpers for common shadcn shapes */
+.rounded-md { border-radius: 16px !important; }
+.rounded-lg { border-radius: 20px !important; }
+.rounded-xl { border-radius: 26px !important; }
+.rounded-2xl { border-radius: 32px !important; }
 
 @utility text-gradient {
   background: var(--gradient-hero);
@@ -354,3 +501,4 @@
   font-family: var(--font-logo);
   letter-spacing: 0.02em;
 }
+
