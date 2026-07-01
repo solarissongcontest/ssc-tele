@@ -100,18 +100,18 @@
   --stage-foreground: oklch(0.97 0.01 220);
 
   /* Milky Liquid Glass — mostly white with faint blue tint, very transparent */
-  --card: rgba(255, 255, 255, 0.10);
+  --card: rgba(255, 255, 255, 0.035);
   --card-foreground: oklch(0.99 0.01 220);
-  --popover: rgba(255, 255, 255, 0.12);
+  --popover: rgba(255, 255, 255, 0.055);
   --popover-foreground: oklch(0.99 0.01 220);
 
   --primary: oklch(0.82 0.14 195);
   --primary-foreground: oklch(0.14 0.05 230);
 
-  --secondary: rgba(255, 255, 255, 0.10);
+  --secondary: rgba(255, 255, 255, 0.045);
   --secondary-foreground: oklch(0.98 0.01 220);
 
-  --muted: rgba(255, 255, 255, 0.06);
+  --muted: rgba(255, 255, 255, 0.035);
   --muted-foreground: oklch(0.82 0.03 220);
 
   --accent: oklch(0.75 0.16 165);
@@ -123,23 +123,23 @@
   --success-foreground: oklch(0.12 0.05 230);
 
   --border: rgba(255, 255, 255, 0.28);
-  --input: rgba(255, 255, 255, 0.14);
+  --input: rgba(255, 255, 255, 0.055);
   --ring: oklch(0.85 0.14 190);
 
   --glow: oklch(0.85 0.16 190);
 
-  --sidebar: rgba(255, 255, 255, 0.08);
+  --sidebar: rgba(255, 255, 255, 0.035);
   --sidebar-foreground: oklch(0.96 0.02 220);
   --sidebar-primary: oklch(0.82 0.14 195);
   --sidebar-primary-foreground: oklch(0.14 0.05 230);
-  --sidebar-accent: rgba(255, 255, 255, 0.10);
+  --sidebar-accent: rgba(255, 255, 255, 0.045);
   --sidebar-accent-foreground: oklch(0.98 0.01 220);
   --sidebar-border: rgba(255, 255, 255, 0.22);
   --sidebar-ring: oklch(0.85 0.14 190);
 
   /* Liquid Glass tint — milky bluish-white, ~10-14% */
-  --card-tint: rgba(230, 240, 255, 0.10);
-  --glass-tint-strong: rgba(230, 240, 255, 0.14);
+  --card-tint: rgba(230, 245, 255, 0.028);
+  --glass-tint-strong: rgba(230, 245, 255, 0.045);
 
   --gradient-stage:
     radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.55 0.22 190 / 0.55), transparent 60%),
@@ -201,14 +201,14 @@
 @utility glass {
   position: relative;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.04) 55%, rgba(200,225,255,0.08) 100%),
-    var(--card-tint, rgba(230, 240, 255, 0.10));
-  backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
-  -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
-  border: 1px solid rgba(255, 255, 255, 0.32);
+    linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.025) 22%, transparent 48%),
+    linear-gradient(180deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.012) 45%, rgba(130,210,255,0.035) 100%),
+    var(--card-tint, rgba(230, 245, 255, 0.028));
+  backdrop-filter: blur(44px) saturate(190%) brightness(1.08);
+  border: 1px solid rgba(255, 255, 255, 0.30);
   border-radius: 28px;
   box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.72),
     inset 0 -1px 0 rgba(255, 255, 255, 0.10),
     inset 1px 0 0 rgba(255, 255, 255, 0.18),
     inset -1px 0 0 rgba(255, 255, 255, 0.12),
@@ -224,8 +224,8 @@
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(120% 70% at 30% -10%, rgba(255,255,255,0.30), transparent 55%),
-      linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.02) 40%, rgba(255,255,255,0) 70%);
+      radial-gradient(120% 62% at 26% -18%, rgba(255,255,255,0.22), transparent 42%),
+      linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.025) 20%, rgba(255,255,255,0) 58%);
     border-radius: inherit;
     z-index: 0;
   }
@@ -237,8 +237,8 @@
     border-radius: inherit;
     box-shadow:
       inset 0 0 0 1px rgba(255, 255, 255, 0.10),
-      inset 0 0 40px rgba(140, 200, 255, 0.10);
-    background: radial-gradient(80% 40% at 80% 110%, rgba(120, 200, 255, 0.10), transparent 60%);
+      inset 0 0 42px rgba(140, 220, 255, 0.075);
+    background: radial-gradient(80% 40% at 80% 110%, rgba(120, 210, 255, 0.07), transparent 58%);
     z-index: 0;
   }
   & > * { position: relative; z-index: 1; }
@@ -247,10 +247,10 @@
 @utility glass-strong {
   position: relative;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 50%, rgba(200,225,255,0.10) 100%),
-    var(--glass-tint-strong, rgba(230, 240, 255, 0.14));
-  backdrop-filter: blur(40px) saturate(190%) brightness(1.06);
-  -webkit-backdrop-filter: blur(40px) saturate(190%) brightness(1.06);
+    linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 22%, transparent 50%),
+    linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.016) 45%, rgba(130,210,255,0.045) 100%),
+    var(--glass-tint-strong, rgba(230, 245, 255, 0.045));
+  backdrop-filter: blur(54px) saturate(205%) brightness(1.08);
   border: 1px solid rgba(255, 255, 255, 0.36);
   border-radius: 32px;
   box-shadow:
@@ -271,8 +271,8 @@
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(130% 75% at 30% -15%, rgba(255,255,255,0.36), transparent 55%),
-      linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.03) 42%, rgba(255,255,255,0) 70%);
+      radial-gradient(130% 66% at 30% -18%, rgba(255,255,255,0.24), transparent 42%),
+      linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.03) 22%, rgba(255,255,255,0) 62%);
     border-radius: inherit;
     z-index: 0;
   }
@@ -282,7 +282,7 @@
     top: 0; left: 0; bottom: 0;
     width: 45%;
     pointer-events: none;
-    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.22) 50%, transparent 100%);
+    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.16) 50%, transparent 100%);
     transform: translateX(-140%) skewX(-14deg);
     animation: liquid-sheen 11s ease-in-out infinite;
     z-index: 0;
@@ -293,10 +293,9 @@
 @utility glass-button {
   position: relative;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.06) 55%, rgba(200,225,255,0.10)),
-    rgba(230, 240, 255, 0.10);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
+    linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.035) 55%, rgba(200,225,255,0.055)),
+    rgba(230, 245, 255, 0.035);
+  backdrop-filter: blur(30px) saturate(190%);
   border: 1px solid rgba(255, 255, 255, 0.38);
   border-radius: 9999px;
   box-shadow:
@@ -314,12 +313,12 @@
     inset: 0;
     pointer-events: none;
     border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255,255,255,0.35), rgba(255,255,255,0) 50%);
+     background: linear-gradient(180deg, rgba(255,255,255,0.25), rgba(255,255,255,0) 44%);
   }
   &:hover {
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.08) 55%, rgba(200,225,255,0.14)),
-      rgba(230, 240, 255, 0.14);
+      linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.045) 55%, rgba(200,225,255,0.075)),
+      rgba(230, 245, 255, 0.055);
     transform: scale(1.02);
     box-shadow:
       inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
