@@ -281,66 +281,46 @@
 
 
 
-/* Primary / hero buttons — premium water-drop liquid glass, themeable */
+/* ALL buttons — unified premium water-drop liquid glass pill (like the sample) */
 button.bg-primary,
-[class*=" bg-primary"]:not([class*="bg-primary/"]):is(button, a, [role="button"]),
-.bg-primary:is(button, a, [role="button"]) {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.32), rgba(255,255,255,0.06) 55%, rgba(255,255,255,0.14)),
-    var(--gradient-hero) !important;
-  background-blend-mode: screen, normal;
-  backdrop-filter: blur(30px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.55) !important;
-  border-radius: 9999px !important;
-  color: var(--primary-foreground) !important;
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 0 26px rgba(255, 255, 255, 0.14),
-    0 8px 22px rgba(0, 0, 0, 0.30),
-    0 18px 44px -12px rgba(0, 0, 0, 0.45),
-    0 0 40px -8px var(--glow, oklch(0.85 0.16 190 / 0.55)) !important;
-  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease;
-}
-button.bg-primary:hover,
-[class*=" bg-primary"]:is(button, a, [role="button"]):hover {
-  transform: scale(1.03);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 0 30px rgba(255, 255, 255, 0.18),
-    0 10px 26px rgba(0, 0, 0, 0.34),
-    0 22px 52px -12px rgba(0, 0, 0, 0.50),
-    0 0 56px -4px var(--glow, oklch(0.85 0.16 190 / 0.75)) !important;
-}
-button.bg-primary:active { transform: scale(0.97); }
-
-/* Secondary / outline / ghost buttons — neutral milky glass pill */
 button.bg-secondary,
 button[class*="bg-background"],
 button.border.border-input,
+[class*=" bg-primary"]:not([class*="bg-primary/"]):is(button, a, [role="button"]),
+.bg-primary:is(button, a, [role="button"]),
 [class*="bg-secondary"]:is(button, a, [role="button"]) {
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.025) 55%),
-    rgba(230, 245, 255, 0.025) !important;
-  backdrop-filter: blur(32px) saturate(195%);
-  border: 1px solid rgba(255, 255, 255, 0.34) !important;
+    linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04) 55%, rgba(200,225,255,0.08)),
+    rgba(230, 245, 255, 0.05) !important;
+  backdrop-filter: blur(30px) saturate(195%);
+  border: 1px solid rgba(255, 255, 255, 0.44) !important;
   border-radius: 9999px !important;
   color: var(--foreground) !important;
   box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.60),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
-    0 4px 14px rgba(0, 0, 0, 0.22),
-    0 10px 26px -8px rgba(0, 0, 0, 0.30) !important;
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 22px rgba(255, 255, 255, 0.08),
+    0 6px 18px rgba(0, 0, 0, 0.28),
+    0 14px 34px -10px rgba(0, 0, 0, 0.40) !important;
   transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease;
 }
+button.bg-primary:hover,
 button.bg-secondary:hover,
+[class*=" bg-primary"]:is(button, a, [role="button"]):hover,
 [class*="bg-secondary"]:is(button, a, [role="button"]):hover {
   transform: scale(1.02);
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.19), rgba(255,255,255,0.04) 55%),
-    rgba(230, 245, 255, 0.045) !important;
+    linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.05) 55%, rgba(200,225,255,0.10)),
+    rgba(230, 245, 255, 0.07) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 22px rgba(0, 0, 0, 0.32),
+    0 18px 44px -10px rgba(0, 0, 0, 0.45),
+    0 0 40px -6px var(--glow, oklch(0.85 0.16 190 / 0.55)) !important;
 }
+button.bg-primary:active,
+button.bg-secondary:active { transform: scale(0.98); }
 
 /* Inputs & textareas — recessed liquid capsules */
 input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]),
