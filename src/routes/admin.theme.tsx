@@ -28,31 +28,29 @@ type ColorField = {
 const COLOR_FIELDS: ColorField[] = [
   { key: "background", label: "Background", hint: "Page background base color" },
   { key: "foreground", label: "Foreground / Text" },
-  { key: "primary", label: "Primary (buttons, accents)" },
+  { key: "primary", label: "Primary accent" },
   { key: "primaryForeground", label: "Text on primary" },
   { key: "accent", label: "Accent" },
   { key: "destructive", label: "Destructive" },
   { key: "success", label: "Success" },
-  { key: "glow", label: "Glow / Halo" },
+  { key: "glow", label: "Button glow / halo" },
 ];
 
-const GRADIENT_FIELDS: ColorField[] = [
-  {
-    key: "gradientStage",
-    label: "Background gradient (full CSS background)",
-    hint: "Any valid CSS background value (gradients, layered).",
-  },
-  {
-    key: "gradientHero",
-    label: "Hero button gradient (Enter Booth, Vote, primary CTAs)",
-    hint: "Two-color liquid-glass gradient behind every primary/hero button. Any CSS gradient value.",
-  },
-  {
-    key: "cardTint",
-    label: "Glass panel tint",
-    hint: "Use rgba() with low alpha (e.g. rgba(12,22,40,0.10)).",
-  },
-];
+// Extract the first two color-ish tokens from a CSS gradient string.
+function extractGradientStops(css: string): [string, string] {
+  const m = css.match(
+    /(#[0-9a-f]{3,8}|rgba?\([^)]*\)|oklch\([^)]*\)|hsla?\([^)]*\))/gi,
+  );
+  return [m?.[0] ?? "#66d9d9", m?.[1] ?? "#66d99b"];
+}
+
+function buildHeroGradient(a: string, b: string) {
+  return `linear-gradient(135deg, ${a}, ${b})`;
+}
+
+function buildStageGradient(top: string, bottom: string) {
+  return `linear-gradient(180deg, ${top}, ${bottom})`;
+}
 
 function AdminTheme() {
   const [theme, setTheme] = useState<ThemeTokens>(() => loadTheme());
@@ -66,6 +64,9 @@ function AdminTheme() {
     setTheme((t) => ({ ...t, [key]: value }));
     setDirty(true);
   };
+
+  const [heroA, heroB] = extractGradientStops(theme.gradientHero);
+  const [stageTop, stageBottom] = extractGradientStops(theme.gradientStage);
 
   const onSave = () => {
     saveTheme(theme);
@@ -94,8 +95,7 @@ function AdminTheme() {
           </p>
           <h2 className="mt-1 text-2xl font-bold">Theme colours</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Live-edit the colour tokens, button gradients and background of the
-            entire platform. Saved per-browser via local storage.
+            Live-edit every colour with the pickers below. Saved per-browser.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button onClick={onSave} disabled={!dirty}>
@@ -125,26 +125,43 @@ function AdminTheme() {
         </section>
 
         <section className="glass rounded-2xl p-6 space-y-4">
-          <h3 className="font-semibold">Gradients & glass</h3>
-          <div className="space-y-4">
-            {GRADIENT_FIELDS.map((f) => (
-              <div key={f.key} className="space-y-1.5">
-                <Label className="text-sm">{f.label}</Label>
-                <textarea
-                  value={theme[f.key] as string}
-                  onChange={(e) =>
-                    update(f.key, e.target.value as ThemeTokens[typeof f.key])
-                  }
-                  rows={3}
-                  className="w-full rounded-md border border-border bg-input/40 px-3 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {f.hint && (
-                  <p className="text-xs text-muted-foreground">{f.hint}</p>
-                )}
-              </div>
-            ))}
+          <h3 className="font-semibold">Hero button gradient</h3>
+          <p className="text-xs text-muted-foreground">
+            The two colors behind every Enter Booth / Vote / primary button.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <ColorRow
+              field={{ key: "gradientHero", label: "Button color A" }}
+              value={heroA}
+              onChange={(v) => update("gradientHero", buildHeroGradient(v, heroB))}
+            />
+            <ColorRow
+              field={{ key: "gradientHero", label: "Button color B" }}
+              value={heroB}
+              onChange={(v) => update("gradientHero", buildHeroGradient(heroA, v))}
+            />
           </div>
         </section>
+
+        <section className="glass rounded-2xl p-6 space-y-4">
+          <h3 className="font-semibold">Background gradient</h3>
+          <p className="text-xs text-muted-foreground">
+            Fallback background behind the starfield artwork (visible at edges).
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <ColorRow
+              field={{ key: "gradientStage", label: "Top" }}
+              value={stageTop}
+              onChange={(v) => update("gradientStage", buildStageGradient(v, stageBottom))}
+            />
+            <ColorRow
+              field={{ key: "gradientStage", label: "Bottom" }}
+              value={stageBottom}
+              onChange={(v) => update("gradientStage", buildStageGradient(stageTop, v))}
+            />
+          </div>
+        </section>
+
 
         <section className="glass-strong rounded-2xl p-6 space-y-4">
           <h3 className="font-semibold">Live preview</h3>
