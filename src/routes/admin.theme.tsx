@@ -44,8 +44,8 @@ const GRADIENT_FIELDS: ColorField[] = [
   },
   {
     key: "gradientHero",
-    label: "Hero gradient (used for headings & primary buttons)",
-    hint: "Linear / radial gradient CSS value.",
+    label: "Hero button gradient (Enter Booth, Vote, primary CTAs)",
+    hint: "Two-color liquid-glass gradient behind every primary/hero button. Any CSS gradient value.",
   },
   {
     key: "cardTint",
