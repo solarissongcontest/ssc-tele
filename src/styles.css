@@ -177,7 +177,11 @@
   }
   body {
     color: var(--color-foreground);
-    background: var(--gradient-stage);
+    background-color: oklch(0.09 0.05 245);
+    background-image: url("/__l5e/assets-v1/cc212ce0-87fc-441f-9cd4-291afacd206c/starfield-bg.jpeg");
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
     background-attachment: fixed;
     font-family: var(--font-display);
     font-weight: 400;
