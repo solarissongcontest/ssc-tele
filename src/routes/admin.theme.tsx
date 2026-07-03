@@ -190,8 +190,9 @@ function AdminTheme() {
           </div>
         </section>
 
-
+        <section className="glass-strong rounded-2xl p-6 space-y-4">
           <h3 className="font-semibold">Live preview</h3>
+
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="glass rounded-xl p-4">
               <p className="text-xs uppercase tracking-widest text-primary">
