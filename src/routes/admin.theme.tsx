@@ -4,7 +4,9 @@ import { AdminShell } from "@/components/admin-shell";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
+
 import {
   DEFAULT_THEME,
   loadTheme,
@@ -162,8 +164,33 @@ function AdminTheme() {
           </div>
         </section>
 
+        <section className="glass rounded-2xl p-6 space-y-4">
+          <div className="flex items-baseline justify-between gap-4">
+            <div>
+              <h3 className="font-semibold">Panel opacity</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Global transparency for every frosted panel, card, modal, dropdown, sidebar and navigation surface. Blur is preserved.
+              </p>
+            </div>
+            <span className="font-mono text-xs tabular-nums text-muted-foreground shrink-0">
+              {Math.round((theme.panelOpacity ?? 0.10) * 100)}%
+            </span>
+          </div>
+          <Slider
+            min={0}
+            max={60}
+            step={1}
+            value={[Math.round((theme.panelOpacity ?? 0.10) * 100)]}
+            onValueChange={([v]) => update("panelOpacity", v / 100)}
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>Fully transparent (0%)</span>
+            <span>Frosted (10%)</span>
+            <span>Opaque (60%)</span>
+          </div>
+        </section>
 
-        <section className="glass-strong rounded-2xl p-6 space-y-4">
+
           <h3 className="font-semibold">Live preview</h3>
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="glass rounded-xl p-4">
