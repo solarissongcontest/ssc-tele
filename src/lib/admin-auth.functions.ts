@@ -62,7 +62,7 @@ async function loadAdminFromCookie() {
   if (!admin || (admin as any).disabled) {
     return { session, admin: null as null | AdminRow };
   }
-  return { session, admin: admin as AdminRow };
+  return { session, admin: admin as unknown as AdminRow };
 }
 
 type AdminRow = {
