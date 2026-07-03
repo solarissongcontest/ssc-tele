@@ -14,6 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_accounts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          disabled: boolean
+          id: string
+          is_super_admin: boolean
+          last_login_at: string | null
+          password_hash: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          disabled?: boolean
+          id?: string
+          is_super_admin?: boolean
+          last_login_at?: string | null
+          password_hash: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          disabled?: boolean
+          id?: string
+          is_super_admin?: boolean
+          last_login_at?: string | null
+          password_hash?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_accounts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admin_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor_admin_id: string | null
+          actor_username: string | null
+          created_at: string
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          reason: string | null
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          actor_admin_id?: string | null
+          actor_username?: string | null
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          reason?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor_admin_id?: string | null
+          actor_username?: string | null
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          reason?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_actor_admin_id_fkey"
+            columns: ["actor_admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_sessions: {
+        Row: {
+          admin_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          ip_hash: string | null
+          token_hash: string
+          user_agent: string | null
+        }
+        Insert: {
+          admin_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          ip_hash?: string | null
+          token_hash: string
+          user_agent?: string | null
+        }
+        Update: {
+          admin_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          ip_hash?: string | null
+          token_hash?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_sessions_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       anti_abuse_events: {
         Row: {
           country_code: string | null
@@ -315,6 +444,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_hash_password: { Args: { _password: string }; Returns: string }
+      admin_verify_credentials: {
+        Args: { _password: string; _username: string }
+        Returns: {
+          id: string
+          is_super_admin: boolean
+          username: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
