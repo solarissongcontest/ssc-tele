@@ -11,15 +11,18 @@ import {
   LogOut,
   Menu,
   Palette,
+  Users,
   X,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { SolarisLogo } from "./solaris-logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/use-auth";
-import { useIsAdmin } from "@/hooks/use-is-admin";
+import { useAdminSession } from "@/hooks/use-admin-session";
+import { adminLogout } from "@/lib/admin-auth.functions";
 
-const NAV = [
+const BASE_NAV = [
   { to: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/admin/editions", label: "Editions", icon: CalendarDays },
   { to: "/admin/rounds", label: "Rounds", icon: PlayCircle },
@@ -29,10 +32,23 @@ const NAV = [
   { to: "/admin/theme", label: "Theme", icon: Palette },
 ] as const;
 
-function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarBody({
+  onNavigate,
+  isSuperAdmin,
+  username,
+}: {
+  onNavigate?: () => void;
+  isSuperAdmin: boolean;
+  username: string | undefined;
+}) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { signOut } = useAuth();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const logoutFn = useServerFn(adminLogout);
+
+  const nav = isSuperAdmin
+    ? ([...BASE_NAV, { to: "/admin/accounts", label: "Admin Accounts", icon: Users }] as const)
+    : BASE_NAV;
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
@@ -41,9 +57,15 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex flex-col h-full">
       <div className="px-5 py-5 border-b border-sidebar-border">
         <SolarisLogo />
+        {username && (
+          <p className="mt-2 text-[11px] text-muted-foreground truncate">
+            Signed in as <span className="text-foreground font-medium">{username}</span>
+            {isSuperAdmin && " · Super Admin"}
+          </p>
+        )}
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {NAV.map((item) => {
+        {nav.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.to, (item as any).exact);
           return (
@@ -76,12 +98,13 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
           size="sm"
           className="w-full justify-start text-muted-foreground hover:text-destructive"
           onClick={async () => {
-            await signOut();
+            await logoutFn({});
+            await qc.invalidateQueries({ queryKey: ["admin-session"] });
             navigate({ to: "/auth" });
           }}
         >
           <LogOut className="h-4 w-4" />
-          Sign Out
+          Log out
         </Button>
       </div>
     </div>
@@ -90,17 +113,14 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
 
 export function AdminShell({ title, children }: { title: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const { loading: authLoading, user } = useAuth();
-  const { isAdmin, loading: roleLoading } = useIsAdmin();
+  const { admin, isLoading, isSuperAdmin } = useAdminSession();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate({ to: "/auth" });
-    }
-  }, [authLoading, user, navigate]);
+    if (!isLoading && !admin) navigate({ to: "/auth" });
+  }, [isLoading, admin, navigate]);
 
-  if (authLoading || roleLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen grid place-items-center">
         <div className="text-muted-foreground text-sm animate-pulse">Loading admin…</div>
@@ -108,7 +128,7 @@ export function AdminShell({ title, children }: { title: string; children: React
     );
   }
 
-  if (!user) {
+  if (!admin) {
     return (
       <div className="min-h-screen grid place-items-center">
         <div className="text-muted-foreground text-sm">Redirecting…</div>
@@ -116,33 +136,12 @@ export function AdminShell({ title, children }: { title: string; children: React
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen grid place-items-center px-6">
-        <div className="glass-strong rounded-2xl p-8 max-w-md text-center space-y-4">
-          <ShieldAlert className="h-10 w-10 text-destructive mx-auto" />
-          <h1 className="text-xl font-semibold">Not authorized</h1>
-          <p className="text-sm text-muted-foreground">
-            Your account doesn't have admin access. Ask a contest organizer to grant you the
-            <code className="mx-1 px-1.5 py-0.5 rounded bg-muted text-xs">admin</code>
-            role.
-          </p>
-          <Button asChild variant="outline" className="w-full">
-            <Link to="/">Back to voting</Link>
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen md:grid md:grid-cols-[260px_1fr]">
-      {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col bg-sidebar border-r border-sidebar-border min-h-screen sticky top-0">
-        <SidebarBody />
+        <SidebarBody isSuperAdmin={isSuperAdmin} username={admin.username} />
       </aside>
 
-      {/* Mobile drawer */}
       {open && (
         <div className="md:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
@@ -152,7 +151,11 @@ export function AdminShell({ title, children }: { title: string; children: React
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            <SidebarBody onNavigate={() => setOpen(false)} />
+            <SidebarBody
+              onNavigate={() => setOpen(false)}
+              isSuperAdmin={isSuperAdmin}
+              username={admin.username}
+            />
           </aside>
         </div>
       )}
