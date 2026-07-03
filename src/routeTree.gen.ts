@@ -19,6 +19,7 @@ import { Route as AdminResultsRouteImport } from './routes/admin.results'
 import { Route as AdminEditionsRouteImport } from './routes/admin.editions'
 import { Route as AdminAntiAbuseRouteImport } from './routes/admin.anti-abuse'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
+import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -70,11 +71,17 @@ const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAccountsRoute = AdminAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
   '/admin/editions': typeof AdminEditionsRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
   '/admin/editions': typeof AdminEditionsRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
   '/admin/editions': typeof AdminEditionsRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
     | '/admin/editions'
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
     | '/admin/editions'
@@ -136,6 +147,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
     | '/admin/editions'
@@ -223,10 +235,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/accounts': {
+      id: '/admin/accounts'
+      path: '/accounts'
+      fullPath: '/admin/accounts'
+      preLoaderRoute: typeof AdminAccountsRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
 interface AdminRouteChildren {
+  AdminAccountsRoute: typeof AdminAccountsRoute
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminAntiAbuseRoute: typeof AdminAntiAbuseRoute
   AdminEditionsRoute: typeof AdminEditionsRoute
@@ -237,6 +257,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAccountsRoute: AdminAccountsRoute,
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminAntiAbuseRoute: AdminAntiAbuseRoute,
   AdminEditionsRoute: AdminEditionsRoute,
