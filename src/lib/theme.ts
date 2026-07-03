@@ -18,6 +18,7 @@ export type ThemeTokens = {
   glow: string;
   gradientStage: string;     // full CSS background value
   gradientHero: string;      // full CSS background-image value
+  panelOpacity: number;      // 0..0.6, alpha of frosted panels/cards/modals
 };
 
 export const DEFAULT_THEME: ThemeTokens = {
@@ -39,7 +40,9 @@ export const DEFAULT_THEME: ThemeTokens = {
   ].join(", "),
   gradientHero:
     "linear-gradient(135deg, oklch(0.82 0.16 180), oklch(0.74 0.18 155))",
+  panelOpacity: 0.10,
 };
+
 
 const LEGACY_OPAQUE_CARD_TINTS = new Set([
   "rgba(12, 22, 40, 0.12)",
@@ -95,4 +98,7 @@ export function applyTheme(theme: ThemeTokens) {
   r.setProperty("--glass-tint-strong", "rgba(230, 245, 255, 0.045)");
   r.setProperty("--gradient-stage", theme.gradientStage);
   r.setProperty("--gradient-hero", theme.gradientHero);
+  const alpha = Math.max(0, Math.min(0.6, Number(theme.panelOpacity ?? 0.10)));
+  r.setProperty("--panel-alpha", alpha.toFixed(3));
 }
+

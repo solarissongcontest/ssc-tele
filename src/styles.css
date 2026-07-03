@@ -201,10 +201,11 @@
   100% { transform: translateX(240%) skewX(-14deg); opacity: 0; }
 }
 
-/* Large panels — fully transparent frosted sheets (just blur + hairline) */
+/* Large panels — frosted sheets. Opacity driven globally by --panel-alpha
+   (set from the Theme Editor's Panel Opacity slider). Blur is preserved. */
 @utility glass {
   position: relative;
-  background: transparent;
+  background: rgba(10, 20, 40, var(--panel-alpha, 0.10));
   backdrop-filter: blur(36px) saturate(160%);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 28px;
@@ -213,25 +214,25 @@
 
 @utility glass-strong {
   position: relative;
-  background: transparent;
+  background: rgba(10, 20, 40, calc(var(--panel-alpha, 0.10) + 0.04));
   backdrop-filter: blur(40px) saturate(170%);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 32px;
   box-shadow: 0 24px 60px -22px rgba(0, 0, 0, 0.50);
 }
 
-/* Cards — transparent frosted */
+/* Cards — frosted, opacity from slider */
 [class*="bg-card"]:not([class*="bg-card/"]) {
-  background: transparent !important;
+  background: rgba(10, 20, 40, var(--panel-alpha, 0.10)) !important;
   backdrop-filter: blur(36px) saturate(160%);
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-radius: 28px !important;
   box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.45) !important;
 }
 
-/* Popovers / dropdowns / selects — transparent frosted */
+/* Popovers / dropdowns / selects — slightly denser than base panels */
 [data-radix-popper-content-wrapper] > * {
-  background: transparent !important;
+  background: rgba(10, 20, 40, calc(var(--panel-alpha, 0.10) + 0.06)) !important;
   backdrop-filter: blur(34px) saturate(165%);
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-radius: 22px !important;
@@ -239,15 +240,25 @@
   color: var(--foreground) !important;
 }
 
-/* Dialogs — transparent frosted */
+/* Dialogs — a touch denser to help legibility over any background */
 [role="dialog"][data-state="open"],
 [role="alertdialog"][data-state="open"] {
-  background: transparent !important;
+  background: rgba(10, 20, 40, calc(var(--panel-alpha, 0.10) + 0.06)) !important;
   backdrop-filter: blur(40px) saturate(170%);
   border: 1px solid rgba(255, 255, 255, 0.14) !important;
   border-radius: 32px !important;
   box-shadow: 0 30px 70px -22px rgba(0, 0, 0, 0.55) !important;
 }
+
+/* Sidebars & top navigation — same slider-controlled tint */
+[data-sidebar],
+aside[class*="sidebar"],
+nav[class*="sidebar"],
+header nav {
+  background: rgba(10, 20, 40, var(--panel-alpha, 0.10)) !important;
+  backdrop-filter: blur(30px) saturate(160%);
+}
+
 
 /* Water-drop button base (used by both glass-button utility and primary override) */
 @utility glass-button {
