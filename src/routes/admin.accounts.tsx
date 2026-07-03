@@ -80,14 +80,15 @@ function AdminAccountsPage() {
 
   const admins = useQuery({
     queryKey: ["admin-accounts"],
-    queryFn: () => fetchList() as Promise<AdminRow[]>,
+    queryFn: () => fetchList() as unknown as Promise<AdminRow[]>,
     enabled: !!isSuperAdmin,
   });
   const audit = useQuery({
     queryKey: ["admin-audit"],
-    queryFn: () => fetchAudit() as Promise<AuditRow[]>,
+    queryFn: () => fetchAudit() as unknown as Promise<AuditRow[]>,
     enabled: !!isSuperAdmin,
   });
+
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["admin-accounts"] });
