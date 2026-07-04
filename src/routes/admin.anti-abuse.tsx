@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ShieldAlert,
   ShieldCheck,
@@ -10,11 +11,20 @@ import {
   Search,
   Loader2,
   AlertTriangle,
+  Trash2,
+  RotateCcw,
+  MessageSquare,
+  Globe,
+  Wifi,
+  Eye,
+  CheckCircle2,
+  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminShell } from "@/components/admin-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { CountryFlag } from "@/components/country-flag";
 import {
@@ -30,147 +40,170 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAllRounds, useAllCountries } from "@/hooks/use-round-results";
 import { downloadCSV, downloadJSON } from "@/lib/export";
 import { cn } from "@/lib/utils";
+import {
+  listModerationSubmissions,
+  setSubmissionStatus,
+  softDeleteSubmission,
+  restoreSubmission,
+  updateSubmissionNote,
+  type ModerationSubmission,
+} from "@/lib/moderation.functions";
 
 export const Route = createFileRoute("/admin/anti-abuse")({
-  head: () => ({ meta: [{ title: "Anti-Abuse — Solaris Admin" }] }),
-  component: AntiAbusePage,
+  head: () => ({ meta: [{ title: "Moderation — Solaris Admin" }] }),
+  component: ModerationPage,
 });
 
-type Event = {
-  id: string;
-  created_at: string;
-  round_id: string | null;
-  username: string | null;
-  username_normalized: string | null;
-  country_code: string | null;
-  reason: string;
-  risk_score: number;
-  status: string;
-  metadata: any;
+const STATUS_STYLES: Record<string, string> = {
+  active: "bg-primary/15 text-primary border-primary/30",
+  suspicious: "bg-amber-500/15 text-amber-400 border-amber-400/40",
+  verified: "bg-emerald-500/15 text-emerald-400 border-emerald-400/40",
+  deleted: "bg-destructive/15 text-destructive border-destructive/40",
 };
 
-const REASON_LABEL: Record<string, string> = {
-  self_vote: "Self-vote attempt",
-  wrong_total_points: "Wrong total points",
-  too_few_countries: "Too few countries",
-  duplicate_username: "Duplicate username",
-  duplicate_ip: "Duplicate IP",
-  duplicate_fingerprint: "Duplicate fingerprint",
-  duplicate_device: "Duplicate device",
-};
-
-function AntiAbusePage() {
+function ModerationPage() {
   const qc = useQueryClient();
   const { data: rounds } = useAllRounds();
   const { data: countries } = useAllCountries();
   const [roundId, setRoundId] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [q, setQ] = useState("");
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [detail, setDetail] = useState<ModerationSubmission | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ModerationSubmission | null>(
+    null,
+  );
+  const [deleteReason, setDeleteReason] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
+
+  const listFn = useServerFn(listModerationSubmissions);
+  const statusFn = useServerFn(setSubmissionStatus);
+  const deleteFn = useServerFn(softDeleteSubmission);
+  const restoreFn = useServerFn(restoreSubmission);
+  const noteFn = useServerFn(updateSubmissionNote);
 
   const byCode = useMemo(() => {
     const m = new Map<string, { name: string; flag: string; flag_url: string | null }>();
     (countries ?? []).forEach((c) => m.set(c.code, c));
     return m;
   }, [countries]);
+
   const roundName = (id: string | null) =>
     rounds?.find((r) => r.id === id)?.name ?? "—";
 
-  const events = useQuery({
-    queryKey: ["anti-abuse-events"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("anti_abuse_events")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data as Event[];
+  const subs = useQuery({
+    queryKey: ["moderation-subs", roundId],
+    queryFn: () =>
+      listFn({ data: { roundId: roundId === "all" ? null : roundId } }) as Promise<
+        ModerationSubmission[]
+      >,
+    refetchInterval: 20_000,
+  });
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["moderation-subs"] });
+    qc.invalidateQueries({ queryKey: ["moderation-alerts"] });
+  };
+
+  const statusMut = useMutation({
+    mutationFn: (v: {
+      id: string;
+      status: "active" | "suspicious" | "verified";
+    }) => statusFn({ data: v }),
+    onSuccess: () => {
+      toast.success("Status updated");
+      invalidateAll();
     },
-    refetchInterval: 15_000,
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (v: { id: string; reason: string }) => deleteFn({ data: v }),
+    onSuccess: () => {
+      toast.success("Vote deleted");
+      setDeleteTarget(null);
+      setDeleteReason("");
+      invalidateAll();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+  });
+
+  const restoreMut = useMutation({
+    mutationFn: (id: string) => restoreFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Vote restored");
+      invalidateAll();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+  });
+
+  const noteMut = useMutation({
+    mutationFn: (v: { id: string; note: string }) => noteFn({ data: v }),
+    onSuccess: () => {
+      toast.success("Note saved");
+      invalidateAll();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return (events.data ?? []).filter((e) => {
-      if (roundId !== "all" && e.round_id !== roundId) return false;
-      if (status !== "all" && e.status !== status) return false;
+    return (subs.data ?? []).filter((s) => {
+      if (!showDeleted && s.status === "deleted") return false;
+      if (status !== "all" && s.status !== status) return false;
       if (term) {
-        const hay = `${e.username ?? ""} ${e.username_normalized ?? ""} ${
-          e.country_code ?? ""
-        } ${e.reason}`.toLowerCase();
+        const hay = `${s.username} ${s.country_code} ${s.ip_country ?? ""}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
       return true;
     });
-  }, [events.data, roundId, status, q]);
-
-  const whitelistMut = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("anti_abuse_events")
-        .update({ status: "whitelisted" })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Marked as whitelisted");
-      qc.invalidateQueries({ queryKey: ["anti-abuse-events"] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Could not update"),
-  });
-
-  const exportRows = () =>
-    filtered.map((e) => ({
-      timestamp: e.created_at,
-      username: e.username ?? "",
-      home_country: byCode.get(e.country_code ?? "")?.name ?? e.country_code ?? "",
-      home_code: e.country_code ?? "",
-      round: roundName(e.round_id),
-      reason: REASON_LABEL[e.reason] ?? e.reason,
-      reason_code: e.reason,
-      risk_score: e.risk_score,
-      status: e.status,
-    }));
-
-  const exportCSV = () =>
-    downloadCSV(
-      `solaris-anti-abuse-${new Date().toISOString().slice(0, 10)}.csv`,
-      exportRows(),
-      [
-        "timestamp",
-        "username",
-        "home_country",
-        "home_code",
-        "round",
-        "reason",
-        "reason_code",
-        "risk_score",
-        "status",
-      ],
-    );
-
-  const exportJSON_ = () =>
-    downloadJSON(
-      `solaris-anti-abuse-${new Date().toISOString().slice(0, 10)}.json`,
-      exportRows(),
-    );
+  }, [subs.data, status, q, showDeleted]);
 
   const totals = useMemo(() => {
-    const all = events.data ?? [];
+    const all = subs.data ?? [];
     return {
       total: all.length,
-      pending: all.filter((e) => e.status === "pending").length,
-      whitelisted: all.filter((e) => e.status === "whitelisted").length,
-      high: all.filter((e) => e.risk_score >= 70).length,
+      suspicious: all.filter((s) => s.status === "suspicious").length,
+      verified: all.filter((s) => s.status === "verified").length,
+      deleted: all.filter((s) => s.status === "deleted").length,
+      vpn: all.filter((s) => s.is_vpn).length,
+      mismatch: all.filter(
+        (s) =>
+          s.ip_country &&
+          s.ip_country.toUpperCase() !== s.country_code.toUpperCase(),
+      ).length,
     };
-  }, [events.data]);
+  }, [subs.data]);
+
+  const exportRows = () =>
+    filtered.map((s) => ({
+      timestamp: s.created_at,
+      username: s.username,
+      home_country: byCode.get(s.country_code)?.name ?? s.country_code,
+      home_code: s.country_code,
+      ip_country: s.ip_country ?? "",
+      is_vpn: s.is_vpn,
+      status: s.status,
+      risk_score: s.risk_score,
+      round: roundName(s.round_id),
+      moderator_note: s.moderator_note ?? "",
+      entries: s.entries
+        .map((e) => `${e.target_country_code}:${e.points}`)
+        .join("|"),
+    }));
 
   return (
-    <AdminShell title="Anti-Abuse">
+    <AdminShell title="Moderation">
       <div className="space-y-6">
         <section className="glass-strong rounded-2xl p-5 sm:p-6">
           <div className="flex items-center gap-3">
@@ -178,20 +211,25 @@ function AntiAbusePage() {
               <ShieldAlert className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-widest text-primary">Vote integrity</p>
-              <h2 className="text-xl font-bold">Suspicious & blocked attempts</h2>
+              <p className="text-xs uppercase tracking-widest text-primary">
+                Vote integrity
+              </p>
+              <h2 className="text-xl font-bold">Moderation dashboard</h2>
               <p className="text-xs text-muted-foreground">
-                Every blocked vote is logged here with reason and risk score.
+                Review, verify, edit or remove submitted ballots. Every action is
+                recorded in the audit log.
               </p>
             </div>
           </div>
         </section>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat label="Events" value={totals.total} />
-          <Stat label="Pending" value={totals.pending} />
-          <Stat label="Whitelisted" value={totals.whitelisted} />
-          <Stat label="High risk (≥70)" value={totals.high} accent />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <Stat label="Ballots" value={totals.total} />
+          <Stat label="Suspicious" value={totals.suspicious} accent />
+          <Stat label="Verified" value={totals.verified} />
+          <Stat label="Deleted" value={totals.deleted} />
+          <Stat label="VPN / proxy" value={totals.vpn} accent />
+          <Stat label="Country mismatch" value={totals.mismatch} />
         </div>
 
         {/* Filters */}
@@ -201,7 +239,7 @@ function AntiAbusePage() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search username, country, reason…"
+              placeholder="Search username or country…"
               className="pl-9"
             />
           </div>
@@ -224,15 +262,24 @@ function AntiAbusePage() {
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="whitelisted">Whitelisted</SelectItem>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="suspicious">Suspicious</SelectItem>
+              <SelectItem value="verified">Verified</SelectItem>
+              <SelectItem value="deleted">Deleted</SelectItem>
             </SelectContent>
           </Select>
           <Button
+            variant={showDeleted ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowDeleted((v) => !v)}
+          >
+            {showDeleted ? "Hiding" : "Show"} deleted
+          </Button>
+          <Button
             variant="outline"
             size="sm"
-            onClick={() => qc.invalidateQueries({ queryKey: ["anti-abuse-events"] })}
+            onClick={() => invalidateAll()}
           >
             <RefreshCcw className="h-4 w-4" />
             Refresh
@@ -245,10 +292,37 @@ function AntiAbusePage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportCSV}>
+              <DropdownMenuItem
+                onClick={() =>
+                  downloadCSV(
+                    `solaris-moderation-${new Date().toISOString().slice(0, 10)}.csv`,
+                    exportRows(),
+                    [
+                      "timestamp",
+                      "username",
+                      "home_country",
+                      "home_code",
+                      "ip_country",
+                      "is_vpn",
+                      "status",
+                      "risk_score",
+                      "round",
+                      "moderator_note",
+                      "entries",
+                    ],
+                  )
+                }
+              >
                 <Download className="h-4 w-4" /> CSV
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportJSON_}>
+              <DropdownMenuItem
+                onClick={() =>
+                  downloadJSON(
+                    `solaris-moderation-${new Date().toISOString().slice(0, 10)}.json`,
+                    exportRows(),
+                  )
+                }
+              >
                 <FileJson className="h-4 w-4" /> JSON
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -256,96 +330,301 @@ function AntiAbusePage() {
         </section>
 
         {/* List */}
-        {events.isLoading ? (
+        {subs.isLoading ? (
           <div className="glass-strong rounded-2xl p-10 grid place-items-center">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="glass-strong rounded-2xl p-10 text-center text-sm text-muted-foreground">
             <ShieldCheck className="h-8 w-8 mx-auto mb-2 text-primary/70" />
-            No matching events. The vote is clean.
+            No ballots match the current filters.
           </div>
         ) : (
           <ul className="space-y-2">
-            {filtered.map((e) => {
-              const country = byCode.get(e.country_code ?? "");
-              const high = e.risk_score >= 70;
+            {filtered.map((s) => {
+              const homeC = byCode.get(s.country_code);
+              const ipC = s.ip_country ? byCode.get(s.ip_country) : null;
+              const mismatch =
+                s.ip_country &&
+                s.ip_country.toUpperCase() !== s.country_code.toUpperCase();
               return (
                 <li
-                  key={e.id}
+                  key={s.id}
                   className={cn(
-                    "glass rounded-xl p-3 sm:p-4 flex items-start gap-3",
-                    high && "ring-1 ring-destructive/40",
+                    "glass rounded-xl p-3 sm:p-4",
+                    s.status === "suspicious" && "ring-1 ring-amber-400/30",
+                    s.status === "deleted" && "opacity-60",
                   )}
                 >
-                  <div
-                    className={cn(
-                      "h-9 w-9 shrink-0 rounded-lg grid place-items-center",
-                      high
-                        ? "bg-destructive/20 text-destructive"
-                        : "bg-primary/15 text-primary",
-                    )}
-                  >
-                    <AlertTriangle className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm truncate">
-                        {e.username ?? "—"}
-                      </span>
-                      <Badge variant="outline" className="text-[10px] inline-flex items-center gap-1">
-                        <CountryFlag country={country} size={12} />
-                        {country?.name ?? "Unknown Country"}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-[10px]",
-                          high ? "text-destructive border-destructive/40" : "",
-                        )}
-                      >
-                        risk {e.risk_score}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-[10px]",
-                          e.status === "whitelisted"
-                            ? "text-primary border-primary/40"
-                            : "",
-                        )}
-                      >
-                        {e.status}
-                      </Badge>
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {REASON_LABEL[e.reason] ?? e.reason} ·{" "}
-                      {roundName(e.round_id)} ·{" "}
-                      {new Date(e.created_at).toLocaleString()}
-                    </div>
-                    {e.metadata && Object.keys(e.metadata).length > 0 && (
-                      <pre className="mt-2 text-[10px] text-muted-foreground bg-card/50 border border-border rounded-md px-2 py-1 overflow-x-auto">
-                        {JSON.stringify(e.metadata)}
-                      </pre>
-                    )}
-                  </div>
-                  {e.status !== "whitelisted" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => whitelistMut.mutate(e.id)}
-                      disabled={whitelistMut.isPending}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={cn(
+                        "h-9 w-9 shrink-0 rounded-lg grid place-items-center",
+                        s.status === "suspicious"
+                          ? "bg-amber-500/20 text-amber-400"
+                          : s.status === "verified"
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : s.status === "deleted"
+                              ? "bg-destructive/20 text-destructive"
+                              : "bg-primary/15 text-primary",
+                      )}
                     >
-                      <ShieldCheck className="h-4 w-4" />
-                      <span className="hidden sm:inline">Whitelist</span>
-                    </Button>
-                  )}
+                      {s.status === "verified" ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : s.status === "deleted" ? (
+                        <Trash2 className="h-4 w-4" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm truncate">
+                          {s.username}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] inline-flex items-center gap-1"
+                        >
+                          <CountryFlag country={homeC} size={12} />
+                          {homeC?.name ?? s.country_code}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={cn("text-[10px] uppercase tracking-wide", STATUS_STYLES[s.status])}
+                        >
+                          {s.status}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px]",
+                            s.risk_score >= 70
+                              ? "text-destructive border-destructive/40"
+                              : s.risk_score >= 30
+                                ? "text-amber-400 border-amber-400/40"
+                                : "",
+                          )}
+                        >
+                          risk {s.risk_score}
+                        </Badge>
+                        {s.is_vpn && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] inline-flex items-center gap-1 text-amber-400 border-amber-400/40"
+                          >
+                            <Wifi className="h-3 w-3" /> VPN
+                          </Badge>
+                        )}
+                        {mismatch && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] inline-flex items-center gap-1 text-amber-400 border-amber-400/40"
+                          >
+                            <Globe className="h-3 w-3" />
+                            IP {ipC?.name ?? s.ip_country}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {roundName(s.round_id)} ·{" "}
+                        {new Date(s.created_at).toLocaleString()} ·{" "}
+                        {s.entries.length} countries ·{" "}
+                        {s.entries.reduce((a, b) => a + b.points, 0)} pts
+                      </div>
+                      {s.moderator_note && (
+                        <div className="mt-2 text-[11px] text-muted-foreground italic border-l-2 border-primary/40 pl-2">
+                          <MessageSquare className="inline h-3 w-3 mr-1" />
+                          {s.moderator_note}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setDetail(s);
+                          setNoteDraft(s.moderator_note ?? "");
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {s.status !== "deleted" && s.status !== "verified" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-emerald-400 border-emerald-400/40"
+                          onClick={() =>
+                            statusMut.mutate({ id: s.id, status: "verified" })
+                          }
+                          disabled={statusMut.isPending}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {s.status !== "deleted" && s.status !== "suspicious" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-amber-400 border-amber-400/40"
+                          onClick={() =>
+                            statusMut.mutate({ id: s.id, status: "suspicious" })
+                          }
+                          disabled={statusMut.isPending}
+                        >
+                          <Flag className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {s.status !== "deleted" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive border-destructive/40"
+                          onClick={() => {
+                            setDeleteTarget(s);
+                            setDeleteReason("");
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => restoreMut.mutate(s.id)}
+                          disabled={restoreMut.isPending}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </li>
               );
             })}
           </ul>
         )}
       </div>
+
+      {/* Detail dialog */}
+      <Dialog open={!!detail} onOpenChange={(v) => !v && setDetail(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ballot detail</DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <Info label="Username" value={detail.username} />
+                <Info label="Home" value={detail.country_code} />
+                <Info label="IP country" value={detail.ip_country ?? "—"} />
+                <Info label="VPN" value={detail.is_vpn ? "Yes" : "No"} />
+                <Info label="Risk" value={String(detail.risk_score)} />
+                <Info label="Status" value={detail.status} />
+                <Info
+                  label="Submitted"
+                  value={new Date(detail.created_at).toLocaleString()}
+                />
+                <Info label="Round" value={roundName(detail.round_id)} />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
+                  Points breakdown
+                </p>
+                <ul className="text-xs space-y-1">
+                  {[...detail.entries]
+                    .sort((a, b) => b.points - a.points)
+                    .map((e) => (
+                      <li
+                        key={e.target_country_code}
+                        className="flex items-center gap-2"
+                      >
+                        <CountryFlag
+                          country={byCode.get(e.target_country_code)}
+                          size={14}
+                        />
+                        <span className="flex-1 truncate">
+                          {byCode.get(e.target_country_code)?.name ??
+                            e.target_country_code}
+                        </span>
+                        <span className="tabular-nums font-semibold">
+                          {e.points}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
+                  Moderator note
+                </p>
+                <Textarea
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  placeholder="Add context for future moderators…"
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDetail(null)}
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                if (!detail) return;
+                noteMut.mutate({ id: detail.id, note: noteDraft });
+                setDetail(null);
+              }}
+              disabled={noteMut.isPending}
+            >
+              Save note
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete dialog */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => !v && setDeleteTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this ballot?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The vote will be excluded from all results, but kept in the archive
+            (with your reason) for audit. The voter can re-submit.
+          </p>
+          <Textarea
+            value={deleteReason}
+            onChange={(e) => setDeleteReason(e.target.value)}
+            placeholder="Reason (required)"
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-destructive text-destructive-foreground"
+              disabled={!deleteReason.trim() || deleteMut.isPending}
+              onClick={() =>
+                deleteTarget &&
+                deleteMut.mutate({ id: deleteTarget.id, reason: deleteReason })
+              }
+            >
+              Delete vote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminShell>
   );
 }
@@ -365,11 +644,22 @@ function Stat({
       <div
         className={cn(
           "mt-2 text-2xl font-bold tabular-nums",
-          accent ? "text-destructive" : "text-foreground",
+          accent ? "text-amber-400" : "text-foreground",
         )}
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </div>
+      <div className="font-medium truncate">{value}</div>
     </div>
   );
 }
