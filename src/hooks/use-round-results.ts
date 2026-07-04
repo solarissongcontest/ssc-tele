@@ -12,6 +12,9 @@ export type Submission = {
   country_code: string;
   created_at: string;
   risk_score: number;
+  status?: string;
+  ip_country?: string | null;
+  is_vpn?: boolean;
 };
 
 export type Entry = {
