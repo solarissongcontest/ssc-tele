@@ -52,6 +52,7 @@ function ResultsPage() {
   const { data: rounds, isLoading: roundsLoading } = useAllRounds();
   const { data: countries } = useAllCountries();
   const [roundId, setRoundId] = useState<string | null>(null);
+  const [includeDeleted, setIncludeDeleted] = useState(false);
 
   const effective =
     roundId ??
@@ -59,7 +60,7 @@ function ResultsPage() {
     rounds?.[0]?.id ??
     null;
 
-  const { subs, entries } = useRoundResults(effective);
+  const { subs, entries } = useRoundResults(effective, includeDeleted);
 
   const byCode = useMemo(() => {
     const m = new Map<string, CountryRow>();
@@ -208,6 +209,14 @@ function ResultsPage() {
             </Select>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button
+              variant={includeDeleted ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIncludeDeleted((v) => !v)}
+              title="When on, deleted ballots are included in totals"
+            >
+              {includeDeleted ? "Including deleted" : "Excluding deleted"}
+            </Button>
             <Button variant="outline" size="sm" onClick={refresh}>
               <RefreshCcw className="h-4 w-4" />
               Refresh

@@ -396,38 +396,68 @@ export type Database = {
         Row: {
           country_code: string
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           device_token_hash: string | null
+          edited_at: string | null
+          edited_by: string | null
           fingerprint_hash: string | null
           id: string
+          ip_country: string | null
           ip_hash: string | null
+          is_vpn: boolean
+          moderator_note: string | null
           risk_score: number
           round_id: string
+          status: string
           username: string
           username_normalized: string
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
           country_code: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           device_token_hash?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
           fingerprint_hash?: string | null
           id?: string
+          ip_country?: string | null
           ip_hash?: string | null
+          is_vpn?: boolean
+          moderator_note?: string | null
           risk_score?: number
           round_id: string
+          status?: string
           username: string
           username_normalized: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
           country_code?: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           device_token_hash?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
           fingerprint_hash?: string | null
           id?: string
+          ip_country?: string | null
           ip_hash?: string | null
+          is_vpn?: boolean
+          moderator_note?: string | null
           risk_score?: number
           round_id?: string
+          status?: string
           username?: string
           username_normalized?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: [
           {
@@ -460,18 +490,33 @@ export type Database = {
         }
         Returns: boolean
       }
-      submit_vote: {
-        Args: {
-          p_country_code: string
-          p_device_token_hash?: string
-          p_entries: Json
-          p_fingerprint_hash?: string
-          p_ip_hash?: string
-          p_round_id: string
-          p_username: string
-        }
-        Returns: Json
-      }
+      submit_vote:
+        | {
+            Args: {
+              p_country_code: string
+              p_device_token_hash?: string
+              p_entries: Json
+              p_fingerprint_hash?: string
+              p_ip_hash?: string
+              p_round_id: string
+              p_username: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_country_code: string
+              p_device_token_hash?: string
+              p_entries: Json
+              p_fingerprint_hash?: string
+              p_ip_country?: string
+              p_ip_hash?: string
+              p_is_vpn?: boolean
+              p_round_id: string
+              p_username: string
+            }
+            Returns: Json
+          }
     }
     Enums: {
       app_role: "admin" | "user"
