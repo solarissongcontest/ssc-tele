@@ -52,6 +52,7 @@ function ResultsPage() {
   const { data: rounds, isLoading: roundsLoading } = useAllRounds();
   const { data: countries } = useAllCountries();
   const [roundId, setRoundId] = useState<string | null>(null);
+  const [includeDeleted, setIncludeDeleted] = useState(false);
 
   const effective =
     roundId ??
@@ -59,7 +60,7 @@ function ResultsPage() {
     rounds?.[0]?.id ??
     null;
 
-  const { subs, entries } = useRoundResults(effective);
+  const { subs, entries } = useRoundResults(effective, includeDeleted);
 
   const byCode = useMemo(() => {
     const m = new Map<string, CountryRow>();
