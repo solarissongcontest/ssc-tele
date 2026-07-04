@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Minus, Plus, Vote, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
   hasSubmittedRound,
   markRoundSubmitted,
 } from "@/lib/anti-abuse";
+import { submitVote } from "@/lib/vote.functions";
 import { CountryFlag, countryName } from "@/components/country-flag";
 
 type CountryShape = {
