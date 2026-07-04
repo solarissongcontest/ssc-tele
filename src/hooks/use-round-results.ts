@@ -66,18 +66,20 @@ export function useAllCountries() {
   });
 }
 
-export function useRoundResults(roundId: string | null) {
+export function useRoundResults(roundId: string | null, includeDeleted = false) {
   const qc = useQueryClient();
 
   const subs = useQuery({
-    queryKey: ["results.subs", roundId],
+    queryKey: ["results.subs", roundId, includeDeleted],
     queryFn: async () => {
       if (!roundId) return [];
-      const { data, error } = await supabase
+      let q = supabase
         .from("vote_submissions")
         .select("*")
         .eq("round_id", roundId)
         .order("created_at", { ascending: true });
+      if (!includeDeleted) q = q.neq("status", "deleted");
+      const { data, error } = await q;
       if (error) throw error;
       return data as Submission[];
     },
