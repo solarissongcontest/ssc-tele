@@ -96,6 +96,7 @@ export function VotingBooth({
   const remaining = TOTAL - used;
   const countriesUsed = Object.keys(points).filter((k) => points[k] > 0).length;
 
+  const submitVoteFn = useServerFn(submitVote);
   const submitMut = useMutation({
     mutationFn: async () => {
       const ident = await buildClientIdentity();
@@ -103,16 +104,16 @@ export function VotingBooth({
         .filter(([, p]) => p > 0)
         .map(([target_country_code, p]) => ({ target_country_code, points: p }));
 
-      const { data, error } = await supabase.rpc("submit_vote" as any, {
-        p_round_id: roundId,
-        p_username: username.trim(),
-        p_country_code: home,
-        p_entries: entries,
-        p_ip_hash: null,
-        p_fingerprint_hash: ident.fingerprint_hash,
-        p_device_token_hash: ident.device_token_hash,
+      const data = await submitVoteFn({
+        data: {
+          roundId,
+          username: username.trim(),
+          countryCode: home,
+          entries,
+          fingerprintHash: ident.fingerprint_hash,
+          deviceTokenHash: ident.device_token_hash,
+        },
       });
-      if (error) throw error;
       return { data, entries };
     },
     onSuccess: ({ entries }) => {
