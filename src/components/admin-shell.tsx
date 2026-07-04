@@ -75,6 +75,8 @@ function SidebarBody({
         {nav.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.to, (item as any).exact);
+          const showBadge =
+            (item as any).badgeKey === "moderation" && (alerts.data ?? 0) > 0;
           return (
             <Link
               key={item.to}
@@ -88,7 +90,12 @@ function SidebarBody({
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span className="truncate">{item.label}</span>
+              <span className="truncate flex-1">{item.label}</span>
+              {showBadge && (
+                <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-destructive text-destructive-foreground">
+                  {alerts.data! > 99 ? "99+" : alerts.data}
+                </span>
+              )}
             </Link>
           );
         })}
