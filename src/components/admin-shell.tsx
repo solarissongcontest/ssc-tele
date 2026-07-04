@@ -14,13 +14,14 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { SolarisLogo } from "./solaris-logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAdminSession } from "@/hooks/use-admin-session";
 import { adminLogout } from "@/lib/admin-auth.functions";
+import { getModerationAlertsCount } from "@/lib/moderation.functions";
 
 const BASE_NAV = [
   { to: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -28,7 +29,7 @@ const BASE_NAV = [
   { to: "/admin/rounds", label: "Rounds", icon: PlayCircle },
   { to: "/admin/results", label: "Results", icon: Trophy },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/admin/anti-abuse", label: "Anti-Abuse", icon: ShieldAlert },
+  { to: "/admin/anti-abuse", label: "Anti-Abuse", icon: ShieldAlert, badgeKey: "moderation" },
   { to: "/admin/theme", label: "Theme", icon: Palette },
 ] as const;
 
@@ -45,6 +46,12 @@ function SidebarBody({
   const navigate = useNavigate();
   const qc = useQueryClient();
   const logoutFn = useServerFn(adminLogout);
+  const alertsFn = useServerFn(getModerationAlertsCount);
+  const alerts = useQuery({
+    queryKey: ["moderation-alerts"],
+    queryFn: () => alertsFn() as Promise<number>,
+    refetchInterval: 30_000,
+  });
 
   const nav = isSuperAdmin
     ? ([...BASE_NAV, { to: "/admin/accounts", label: "Admin Accounts", icon: Users }] as const)
