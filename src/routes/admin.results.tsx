@@ -209,6 +209,14 @@ function ResultsPage() {
             </Select>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button
+              variant={includeDeleted ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIncludeDeleted((v) => !v)}
+              title="When on, deleted ballots are included in totals"
+            >
+              {includeDeleted ? "Including deleted" : "Excluding deleted"}
+            </Button>
             <Button variant="outline" size="sm" onClick={refresh}>
               <RefreshCcw className="h-4 w-4" />
               Refresh
