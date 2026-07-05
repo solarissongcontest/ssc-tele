@@ -338,8 +338,8 @@ export type AuditLogRow = {
   action: string;
   target_type: string | null;
   target_id: string | null;
-  old_values: unknown;
-  new_values: unknown;
+  old_values: any;
+  new_values: any;
   reason: string | null;
   created_at: string;
 };
