@@ -57,7 +57,11 @@ function SidebarBody({
   });
 
   const nav = isSuperAdmin
-    ? ([...BASE_NAV, { to: "/admin/accounts", label: "Admin Accounts", icon: Users }] as const)
+    ? ([
+        ...BASE_NAV,
+        { to: "/admin/accounts", label: "Admin Accounts", icon: Users },
+        { to: "/admin/audit-log", label: "Audit Log", icon: FileText },
+      ] as const)
     : BASE_NAV;
 
   const isActive = (to: string, exact?: boolean) =>
