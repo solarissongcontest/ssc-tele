@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { BarChart3, Loader2, RefreshCcw } from "lucide-react";
+import { BarChart3, Loader2, RefreshCcw, Download } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AdminShell } from "@/components/admin-shell";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 } from "@/hooks/use-round-results";
 import { cn } from "@/lib/utils";
 import { CountryFlag, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
+import { downloadExcel, downloadCSV } from "@/lib/export";
 
 type CountryRow = { code: string; name: string; flag: string; flag_url: string | null };
 
@@ -148,6 +149,68 @@ function AnalyticsPage() {
       }));
   }, [subList]);
 
+  /* Status counts & unique voter stats */
+  const statusCounts = useMemo(() => {
+    const c = { active: 0, suspicious: 0, verified: 0, deleted: 0 };
+    for (const s of subList) {
+      const k = (s.status ?? "active") as keyof typeof c;
+      if (k in c) c[k] += 1;
+    }
+    return c;
+  }, [subList]);
+
+  const uniqueStats = useMemo(() => {
+    const users = new Set<string>();
+    const countries = new Set<string>();
+    let vpn = 0;
+    let mismatch = 0;
+    for (const s of subList) {
+      users.add(s.username_normalized);
+      countries.add(s.country_code);
+      if (s.is_vpn) vpn += 1;
+      if (s.ip_country && s.ip_country.toUpperCase() !== s.country_code.toUpperCase())
+        mismatch += 1;
+    }
+    return {
+      uniqueVoters: users.size,
+      uniqueCountries: countries.size,
+      vpn,
+      mismatch,
+    };
+  }, [subList]);
+
+  /* Risk distribution */
+  const riskDistribution = useMemo(() => {
+    const bins = { low: 0, medium: 0, high: 0, critical: 0 };
+    for (const s of subList) {
+      const r = s.risk_score ?? 0;
+      if (r >= 70) bins.critical += 1;
+      else if (r >= 40) bins.high += 1;
+      else if (r >= 20) bins.medium += 1;
+      else bins.low += 1;
+    }
+    return bins;
+  }, [subList]);
+
+  const exportRows = () => {
+    const rows = subList.map((s) => {
+      const es = entryList.filter((e) => e.submission_id === s.id);
+      const total = es.reduce((a, b) => a + b.points, 0);
+      return {
+        username: s.username,
+        home_country: s.country_code,
+        ip_country: s.ip_country ?? "",
+        is_vpn: s.is_vpn ? "yes" : "no",
+        risk_score: s.risk_score ?? 0,
+        status: s.status ?? "active",
+        total_points: total,
+        entries: es.map((e) => `${e.target_country_code}:${e.points}`).join("|"),
+        submitted_at: s.created_at,
+      };
+    });
+    return rows;
+  };
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["results.subs", effective] });
     qc.invalidateQueries({ queryKey: ["results.entries", effective] });
@@ -174,10 +237,32 @@ function AnalyticsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" size="sm" onClick={refresh}>
-            <RefreshCcw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={refresh}>
+              <RefreshCcw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={subList.length === 0}
+              onClick={() =>
+                downloadCSV(`analytics-${effective}.csv`, exportRows())
+              }
+            >
+              <Download className="h-4 w-4" /> CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={subList.length === 0}
+              onClick={() =>
+                downloadExcel(`analytics-${effective}.xls`, exportRows())
+              }
+            >
+              <Download className="h-4 w-4" /> Excel
+            </Button>
+          </div>
         </div>
 
         {!effective ? (
@@ -190,7 +275,39 @@ function AnalyticsPage() {
             body="As voters submit, charts populate live."
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
+          <>
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Kpi label="Unique voters" value={uniqueStats.uniqueVoters} />
+              <Kpi label="Home countries" value={uniqueStats.uniqueCountries} />
+              <Kpi
+                label="VPN / proxy"
+                value={uniqueStats.vpn}
+                tone={uniqueStats.vpn > 0 ? "warn" : "ok"}
+              />
+              <Kpi
+                label="Country mismatch"
+                value={uniqueStats.mismatch}
+                tone={uniqueStats.mismatch > 0 ? "warn" : "ok"}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-4 mt-3">
+              <Kpi label="Active" value={statusCounts.active} />
+              <Kpi
+                label="Suspicious"
+                value={statusCounts.suspicious}
+                tone={statusCounts.suspicious > 0 ? "warn" : "ok"}
+              />
+              <Kpi label="Verified" value={statusCounts.verified} tone="ok" />
+              <Kpi
+                label="Deleted"
+                value={statusCounts.deleted}
+                tone={statusCounts.deleted > 0 ? "warn" : "ok"}
+              />
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2 mt-3">
             <Card title="Voters by home country" subtitle={`${subList.length} total`}>
               <BarList
                 rows={votersByHome.map((v) => ({
@@ -253,10 +370,53 @@ function AnalyticsPage() {
                 ))}
               </div>
             </Card>
-          </div>
+
+            <Card title="Risk distribution" subtitle="voter risk scores">
+              <BarList
+                rows={[
+                  { label: "Low (0–19)", value: riskDistribution.low },
+                  { label: "Medium (20–39)", value: riskDistribution.medium },
+                  { label: "High (40–69)", value: riskDistribution.high },
+                  { label: "Critical (70+)", value: riskDistribution.critical },
+                ]}
+              />
+            </Card>
+            </div>
+          </>
         )}
       </div>
     </AdminShell>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "ok" | "warn" | "neutral";
+}) {
+  return (
+    <div
+      className={cn(
+        "glass rounded-xl p-3",
+        tone === "warn" && "ring-1 ring-amber-500/40",
+      )}
+    >
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "text-2xl font-bold tabular-nums",
+          tone === "warn" ? "text-amber-500" : tone === "ok" ? "text-primary" : "",
+        )}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 

@@ -13,6 +13,8 @@ import {
   Palette,
   Users,
   X,
+  Radar,
+  FileText,
 } from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -30,6 +32,7 @@ const BASE_NAV = [
   { to: "/admin/results", label: "Results", icon: Trophy },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/anti-abuse", label: "Anti-Abuse", icon: ShieldAlert, badgeKey: "moderation" },
+  { to: "/admin/detection", label: "Detection", icon: Radar },
   { to: "/admin/theme", label: "Theme", icon: Palette },
 ] as const;
 
@@ -54,7 +57,11 @@ function SidebarBody({
   });
 
   const nav = isSuperAdmin
-    ? ([...BASE_NAV, { to: "/admin/accounts", label: "Admin Accounts", icon: Users }] as const)
+    ? ([
+        ...BASE_NAV,
+        { to: "/admin/accounts", label: "Admin Accounts", icon: Users },
+        { to: "/admin/audit-log", label: "Audit Log", icon: FileText },
+      ] as const)
     : BASE_NAV;
 
   const isActive = (to: string, exact?: boolean) =>
