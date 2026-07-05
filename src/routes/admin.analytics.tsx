@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { BarChart3, Loader2, RefreshCcw } from "lucide-react";
+import { BarChart3, Loader2, RefreshCcw, Download } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AdminShell } from "@/components/admin-shell";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 } from "@/hooks/use-round-results";
 import { cn } from "@/lib/utils";
 import { CountryFlag, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
+import { downloadExcel, downloadCSV } from "@/lib/export";
 
 type CountryRow = { code: string; name: string; flag: string; flag_url: string | null };
 
