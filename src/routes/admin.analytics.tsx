@@ -237,10 +237,32 @@ function AnalyticsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" size="sm" onClick={refresh}>
-            <RefreshCcw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={refresh}>
+              <RefreshCcw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={subList.length === 0}
+              onClick={() =>
+                downloadCSV(`analytics-${effective}.csv`, exportRows())
+              }
+            >
+              <Download className="h-4 w-4" /> CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={subList.length === 0}
+              onClick={() =>
+                downloadExcel(`analytics-${effective}.xls`, exportRows())
+              }
+            >
+              <Download className="h-4 w-4" /> Excel
+            </Button>
+          </div>
         </div>
 
         {!effective ? (
