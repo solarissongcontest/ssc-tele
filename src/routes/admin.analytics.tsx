@@ -149,6 +149,68 @@ function AnalyticsPage() {
       }));
   }, [subList]);
 
+  /* Status counts & unique voter stats */
+  const statusCounts = useMemo(() => {
+    const c = { active: 0, suspicious: 0, verified: 0, deleted: 0 };
+    for (const s of subList) {
+      const k = (s.status ?? "active") as keyof typeof c;
+      if (k in c) c[k] += 1;
+    }
+    return c;
+  }, [subList]);
+
+  const uniqueStats = useMemo(() => {
+    const users = new Set<string>();
+    const countries = new Set<string>();
+    let vpn = 0;
+    let mismatch = 0;
+    for (const s of subList) {
+      users.add(s.username_normalized);
+      countries.add(s.country_code);
+      if (s.is_vpn) vpn += 1;
+      if (s.ip_country && s.ip_country.toUpperCase() !== s.country_code.toUpperCase())
+        mismatch += 1;
+    }
+    return {
+      uniqueVoters: users.size,
+      uniqueCountries: countries.size,
+      vpn,
+      mismatch,
+    };
+  }, [subList]);
+
+  /* Risk distribution */
+  const riskDistribution = useMemo(() => {
+    const bins = { low: 0, medium: 0, high: 0, critical: 0 };
+    for (const s of subList) {
+      const r = s.risk_score ?? 0;
+      if (r >= 70) bins.critical += 1;
+      else if (r >= 40) bins.high += 1;
+      else if (r >= 20) bins.medium += 1;
+      else bins.low += 1;
+    }
+    return bins;
+  }, [subList]);
+
+  const exportRows = () => {
+    const rows = subList.map((s) => {
+      const es = entryList.filter((e) => e.submission_id === s.id);
+      const total = es.reduce((a, b) => a + b.points, 0);
+      return {
+        username: s.username,
+        home_country: s.country_code,
+        ip_country: s.ip_country ?? "",
+        is_vpn: s.is_vpn ? "yes" : "no",
+        risk_score: s.risk_score ?? 0,
+        status: s.status ?? "active",
+        total_points: total,
+        entries: es.map((e) => `${e.target_country_code}:${e.points}`).join("|"),
+        submitted_at: s.created_at,
+      };
+    });
+    return rows;
+  };
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["results.subs", effective] });
     qc.invalidateQueries({ queryKey: ["results.entries", effective] });
