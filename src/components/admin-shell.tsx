@@ -13,6 +13,8 @@ import {
   Palette,
   Users,
   X,
+  Radar,
+  FileText,
 } from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
