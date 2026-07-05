@@ -370,10 +370,53 @@ function AnalyticsPage() {
                 ))}
               </div>
             </Card>
-          </div>
+
+            <Card title="Risk distribution" subtitle="voter risk scores">
+              <BarList
+                rows={[
+                  { label: "Low (0–19)", value: riskDistribution.low },
+                  { label: "Medium (20–39)", value: riskDistribution.medium },
+                  { label: "High (40–69)", value: riskDistribution.high },
+                  { label: "Critical (70+)", value: riskDistribution.critical },
+                ]}
+              />
+            </Card>
+            </div>
+          </>
         )}
       </div>
     </AdminShell>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "ok" | "warn" | "neutral";
+}) {
+  return (
+    <div
+      className={cn(
+        "glass rounded-xl p-3",
+        tone === "warn" && "ring-1 ring-amber-500/40",
+      )}
+    >
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "text-2xl font-bold tabular-nums",
+          tone === "warn" ? "text-amber-500" : tone === "ok" ? "text-primary" : "",
+        )}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
