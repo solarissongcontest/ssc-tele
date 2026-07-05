@@ -366,5 +366,5 @@ export const listAuditLog = createServerFn({ method: "POST" })
     if (data.actor) q = q.ilike("actor_username", `%${data.actor}%`);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return (rows ?? []) as AuditLogRow[];
+    return (rows ?? []) as unknown as AuditLogRow[];
   });
