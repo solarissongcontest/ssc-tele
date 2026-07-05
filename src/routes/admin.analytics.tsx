@@ -275,7 +275,39 @@ function AnalyticsPage() {
             body="As voters submit, charts populate live."
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
+          <>
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Kpi label="Unique voters" value={uniqueStats.uniqueVoters} />
+              <Kpi label="Home countries" value={uniqueStats.uniqueCountries} />
+              <Kpi
+                label="VPN / proxy"
+                value={uniqueStats.vpn}
+                tone={uniqueStats.vpn > 0 ? "warn" : "ok"}
+              />
+              <Kpi
+                label="Country mismatch"
+                value={uniqueStats.mismatch}
+                tone={uniqueStats.mismatch > 0 ? "warn" : "ok"}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-4 mt-3">
+              <Kpi label="Active" value={statusCounts.active} />
+              <Kpi
+                label="Suspicious"
+                value={statusCounts.suspicious}
+                tone={statusCounts.suspicious > 0 ? "warn" : "ok"}
+              />
+              <Kpi label="Verified" value={statusCounts.verified} tone="ok" />
+              <Kpi
+                label="Deleted"
+                value={statusCounts.deleted}
+                tone={statusCounts.deleted > 0 ? "warn" : "ok"}
+              />
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2 mt-3">
             <Card title="Voters by home country" subtitle={`${subList.length} total`}>
               <BarList
                 rows={votersByHome.map((v) => ({
