@@ -17,6 +17,7 @@ import { Route as AdminThemeRouteImport } from './routes/admin.theme'
 import { Route as AdminRoundsRouteImport } from './routes/admin.rounds'
 import { Route as AdminResultsRouteImport } from './routes/admin.results'
 import { Route as AdminEditionsRouteImport } from './routes/admin.editions'
+import { Route as AdminDetectionRouteImport } from './routes/admin.detection'
 import { Route as AdminAntiAbuseRouteImport } from './routes/admin.anti-abuse'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
@@ -61,6 +62,11 @@ const AdminEditionsRoute = AdminEditionsRouteImport.update({
   path: '/editions',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminDetectionRoute = AdminDetectionRouteImport.update({
+  id: '/detection',
+  path: '/detection',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAntiAbuseRoute = AdminAntiAbuseRouteImport.update({
   id: '/anti-abuse',
   path: '/anti-abuse',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
+  '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
+  '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
+  '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
+    | '/admin/detection'
     | '/admin/editions'
     | '/admin/results'
     | '/admin/rounds'
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
+    | '/admin/detection'
     | '/admin/editions'
     | '/admin/results'
     | '/admin/rounds'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
+    | '/admin/detection'
     | '/admin/editions'
     | '/admin/results'
     | '/admin/rounds'
@@ -221,6 +233,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminEditionsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/detection': {
+      id: '/admin/detection'
+      path: '/detection'
+      fullPath: '/admin/detection'
+      preLoaderRoute: typeof AdminDetectionRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/anti-abuse': {
       id: '/admin/anti-abuse'
       path: '/anti-abuse'
@@ -249,6 +268,7 @@ interface AdminRouteChildren {
   AdminAccountsRoute: typeof AdminAccountsRoute
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminAntiAbuseRoute: typeof AdminAntiAbuseRoute
+  AdminDetectionRoute: typeof AdminDetectionRoute
   AdminEditionsRoute: typeof AdminEditionsRoute
   AdminResultsRoute: typeof AdminResultsRoute
   AdminRoundsRoute: typeof AdminRoundsRoute
@@ -260,6 +280,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAccountsRoute: AdminAccountsRoute,
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminAntiAbuseRoute: AdminAntiAbuseRoute,
+  AdminDetectionRoute: AdminDetectionRoute,
   AdminEditionsRoute: AdminEditionsRoute,
   AdminResultsRoute: AdminResultsRoute,
   AdminRoundsRoute: AdminRoundsRoute,
