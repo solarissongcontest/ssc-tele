@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { AdminShell } from "@/components/admin-shell";
 import {
   CalendarDays,
@@ -9,56 +10,28 @@ import {
   ShieldAlert,
   Users,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { getOverviewStats } from "@/lib/admin-data.functions";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({ meta: [{ title: "Admin Overview — Solaris" }] }),
   component: AdminOverview,
 });
 
-type OverviewStats = {
-  editions: number;
-  rounds: number;
-  openRounds: number;
-  submissions: number;
-  blocked: number;
-  activeEdition: string | null;
-};
-
 function AdminOverview() {
+  const fetchStats = useServerFn(getOverviewStats);
   const { data, isLoading } = useQuery({
     queryKey: ["admin-overview-stats"],
-    queryFn: async (): Promise<OverviewStats> => {
-      const [editions, rounds, openRounds, submissions, blocked, active] =
-        await Promise.all([
-          supabase.from("editions").select("*", { count: "exact", head: true }),
-          supabase.from("rounds").select("*", { count: "exact", head: true }),
-          supabase
-            .from("rounds")
-            .select("*", { count: "exact", head: true })
-            .eq("status", "open"),
-          supabase
-            .from("vote_submissions")
-            .select("*", { count: "exact", head: true }),
-          supabase
-            .from("anti_abuse_events")
-            .select("*", { count: "exact", head: true }),
-          supabase
-            .from("editions")
-            .select("name")
-            .eq("is_active", true)
-            .maybeSingle(),
-        ]);
-      return {
-        editions: editions.count ?? 0,
-        rounds: rounds.count ?? 0,
-        openRounds: openRounds.count ?? 0,
-        submissions: submissions.count ?? 0,
-        blocked: blocked.count ?? 0,
-        activeEdition: (active.data as any)?.name ?? null,
-      };
-    },
-    refetchInterval: 15_000,
+    queryFn: () =>
+      fetchStats() as Promise<{
+        editions: number;
+        rounds: number;
+        openRounds: number;
+        submissions: number;
+        blocked: number;
+        activeEdition: string | null;
+      }>,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
   });
 
   const stats = [
