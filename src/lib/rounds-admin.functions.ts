@@ -154,7 +154,9 @@ export const setEditionArchived = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
-    const patch: Record<string, unknown> = { is_archived: data.archived };
+    const patch: { is_archived: boolean; is_active?: boolean } = {
+      is_archived: data.archived,
+    };
     if (data.archived) patch.is_active = false;
     const { error } = await supabaseAdmin
       .from("editions")
@@ -282,7 +284,11 @@ export const setRoundStatus = createServerFn({ method: "POST" })
         );
     }
 
-    const patch: Record<string, unknown> = { status: data.status };
+    const patch: {
+      status: "draft" | "open" | "closed";
+      opened_at?: string;
+      closed_at?: string;
+    } = { status: data.status };
     if (data.status === "open") patch.opened_at = new Date().toISOString();
     if (data.status === "closed") patch.closed_at = new Date().toISOString();
 
