@@ -29,6 +29,7 @@ type OpenRound = {
 };
 
 function PublicHome() {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["public-open-round"],
     queryFn: async (): Promise<OpenRound | null> => {
@@ -58,7 +59,28 @@ function PublicHome() {
       };
     },
     refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
   });
+
+  // Realtime: refetch immediately whenever a round or its country list changes.
+  useEffect(() => {
+    const channel = supabase
+      .channel("public-open-round")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rounds" },
+        () => qc.invalidateQueries({ queryKey: ["public-open-round"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "round_countries" },
+        () => qc.invalidateQueries({ queryKey: ["public-open-round"] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
 
   return (
     <PublicShell>
