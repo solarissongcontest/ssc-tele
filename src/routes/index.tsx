@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles, Vote, Loader2 } from "lucide-react";
 import { PublicShell } from "@/components/public-shell";
 import { VotingBooth } from "@/components/voting-booth";
