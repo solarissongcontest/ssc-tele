@@ -132,19 +132,22 @@ function RoundsPage() {
     enabled: roundIds.length > 0,
   });
 
+  const createFn = useServerFn(createRound);
+  const renameFn = useServerFn(renameRound);
+  const deleteFn = useServerFn(deleteRound);
+  const statusFn = useServerFn(setRoundStatus);
+
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["rounds"] });
     qc.invalidateQueries({ queryKey: ["round_country_counts"] });
     qc.invalidateQueries({ queryKey: ["public-open-round"] });
+    qc.invalidateQueries({ queryKey: ["all-rounds"] });
   };
 
   const createMut = useMutation({
     mutationFn: async (n: string) => {
       if (!effectiveEdition) throw new Error("Select an edition");
-      const { error } = await supabase
-        .from("rounds")
-        .insert({ name: n, edition_id: effectiveEdition, status: "draft" });
-      if (error) throw error;
+      await createFn({ data: { editionId: effectiveEdition, name: n } });
     },
     onSuccess: () => {
       toast.success("Round created");
@@ -157,8 +160,7 @@ function RoundsPage() {
 
   const renameMut = useMutation({
     mutationFn: async ({ id, n }: { id: string; n: string }) => {
-      const { error } = await supabase.from("rounds").update({ name: n }).eq("id", id);
-      if (error) throw error;
+      await renameFn({ data: { id, name: n } });
     },
     onSuccess: () => {
       toast.success("Renamed");
@@ -171,8 +173,7 @@ function RoundsPage() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("rounds").delete().eq("id", id);
-      if (error) throw error;
+      await deleteFn({ data: { id } });
     },
     onSuccess: () => {
       toast.success("Round deleted");
@@ -183,25 +184,14 @@ function RoundsPage() {
   });
 
   const statusMut = useMutation({
-    mutationFn: async ({ round, status }: { round: Round; status: RoundStatus }) => {
-      if (status === "open") {
-        const c = counts?.[round.id] ?? 0;
-        if (c < 2 || c > 50)
-          throw new Error(`Round must have between 2 and 50 countries (has ${c})`);
-      }
-      const update: Partial<Round> = { status };
-      if (status === "open") update.opened_at = new Date().toISOString();
-      if (status === "closed") update.closed_at = new Date().toISOString();
-      const { error } = await supabase
-        .from("rounds")
-        .update(update as any)
-        .eq("id", round.id);
-      if (error) {
-        if (error.code === "23505") {
-          throw new Error("Another round is already open. Close it first.");
-        }
-        throw error;
-      }
+    mutationFn: async ({
+      round,
+      status,
+    }: {
+      round: Round;
+      status: RoundStatus;
+    }) => {
+      await statusFn({ data: { id: round.id, status } });
     },
     onSuccess: (_d, vars) => {
       toast.success(`Round ${vars.status}`);
