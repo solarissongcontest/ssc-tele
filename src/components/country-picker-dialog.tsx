@@ -111,29 +111,20 @@ export function CountryPickerDialog({
     });
   };
 
+  const saveFn = useServerFn(saveRoundCountries);
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!roundId) throw new Error("No round");
       if (selected.length < MIN || selected.length > MAX)
         throw new Error(`Pick between ${MIN} and ${MAX} countries`);
-      const { error: delErr } = await supabase
-        .from("round_countries")
-        .delete()
-        .eq("round_id", roundId);
-      if (delErr) throw delErr;
-      const rows = selected.map((code, i) => ({
-        round_id: roundId,
-        country_code: code,
-        display_order: i + 1,
-      }));
-      const { error: insErr } = await supabase.from("round_countries").insert(rows);
-      if (insErr) throw insErr;
+      await saveFn({ data: { roundId, countryCodes: selected } });
     },
     onSuccess: () => {
       toast.success("Countries saved");
       qc.invalidateQueries({ queryKey: ["round_countries", roundId] });
       qc.invalidateQueries({ queryKey: ["round_country_counts"] });
       qc.invalidateQueries({ queryKey: ["public-open-round"] });
+      qc.invalidateQueries({ queryKey: ["results.round_countries"] });
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(e.message),
