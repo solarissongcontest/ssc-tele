@@ -117,23 +117,31 @@ export function useRoundResults(roundId: string | null, includeDeleted = false) 
     enabled: !!roundId,
   });
 
-  // Realtime: invalidate on any vote insert for this round
+  // Realtime: invalidate on any vote change for this round.
   useEffect(() => {
     if (!roundId) return;
     const channel = supabase
       .channel(`results-${roundId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "vote_submissions", filter: `round_id=eq.${roundId}` },
+        { event: "*", schema: "public", table: "vote_submissions", filter: `round_id=eq.${roundId}` },
         () => {
           qc.invalidateQueries({ queryKey: ["results.subs", roundId] });
+          qc.invalidateQueries({ queryKey: ["results.entries", roundId] });
         },
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "vote_entries" },
+        { event: "*", schema: "public", table: "vote_entries" },
         () => {
           qc.invalidateQueries({ queryKey: ["results.entries", roundId] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rounds", filter: `id=eq.${roundId}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ["all-rounds"] });
         },
       )
       .subscribe();
