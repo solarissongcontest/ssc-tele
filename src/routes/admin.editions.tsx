@@ -43,6 +43,11 @@ function EditionsPage() {
   const [renameTarget, setRenameTarget] = useState<Edition | null>(null);
   const [name, setName] = useState("");
 
+  const createFn = useServerFn(createEdition);
+  const renameFn = useServerFn(renameEdition);
+  const archiveFn = useServerFn(setEditionArchived);
+  const activateFn = useServerFn(activateEdition);
+
   const { data: editions, isLoading } = useQuery({
     queryKey: ["editions"],
     queryFn: async () => {
@@ -55,12 +60,14 @@ function EditionsPage() {
     },
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["editions"] });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["editions"] });
+    qc.invalidateQueries({ queryKey: ["rounds"] });
+  };
 
   const createMut = useMutation({
     mutationFn: async (n: string) => {
-      const { error } = await supabase.from("editions").insert({ name: n });
-      if (error) throw error;
+      await createFn({ data: { name: n } });
     },
     onSuccess: () => {
       toast.success("Edition created");
@@ -73,8 +80,7 @@ function EditionsPage() {
 
   const renameMut = useMutation({
     mutationFn: async ({ id, n }: { id: string; n: string }) => {
-      const { error } = await supabase.from("editions").update({ name: n }).eq("id", id);
-      if (error) throw error;
+      await renameFn({ data: { id, name: n } });
     },
     onSuccess: () => {
       toast.success("Renamed");
@@ -87,28 +93,18 @@ function EditionsPage() {
 
   const archiveMut = useMutation({
     mutationFn: async ({ id, archived }: { id: string; archived: boolean }) => {
-      const update: any = { is_archived: archived };
-      if (archived) update.is_active = false;
-      const { error } = await supabase.from("editions").update(update).eq("id", id);
-      if (error) throw error;
+      await archiveFn({ data: { id, archived } });
     },
-    onSuccess: () => invalidate(),
+    onSuccess: (_r, vars) => {
+      toast.success(vars.archived ? "Archived" : "Unarchived");
+      invalidate();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const activateMut = useMutation({
     mutationFn: async (id: string) => {
-      // Deactivate all others, then activate target
-      const { error: e1 } = await supabase
-        .from("editions")
-        .update({ is_active: false })
-        .neq("id", id);
-      if (e1) throw e1;
-      const { error: e2 } = await supabase
-        .from("editions")
-        .update({ is_active: true, is_archived: false })
-        .eq("id", id);
-      if (e2) throw e2;
+      await activateFn({ data: { id } });
     },
     onSuccess: () => {
       toast.success("Active edition updated");
