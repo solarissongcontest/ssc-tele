@@ -117,7 +117,7 @@ export const getRoundResults = createServerFn({ method: "POST" })
       return {
         submissions,
         entries,
-        roundCountries: (rc ?? []) as {
+        roundCountries: ((rc ?? []) as unknown) as {
           country_code: string;
           display_order: number;
         }[],
