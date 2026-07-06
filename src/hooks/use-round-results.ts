@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { getRoundResults } from "@/lib/admin-data.functions";
 
 export type Country = { code: string; name: string; flag: string; flag_url: string | null };
 
@@ -68,80 +70,42 @@ export function useAllCountries() {
 
 export function useRoundResults(roundId: string | null, includeDeleted = false) {
   const qc = useQueryClient();
+  const fetchResults = useServerFn(getRoundResults);
 
-  const subs = useQuery({
-    queryKey: ["results.subs", roundId, includeDeleted],
+  const bundle = useQuery({
+    queryKey: ["round-results", roundId, includeDeleted],
     queryFn: async () => {
-      if (!roundId) return [];
-      let q = supabase
-        .from("vote_submissions")
-        .select("*")
-        .eq("round_id", roundId)
-        .order("created_at", { ascending: true });
-      if (!includeDeleted) q = q.neq("status", "deleted");
-      const { data, error } = await q;
-      if (error) throw error;
-      return data as Submission[];
+      if (!roundId) return null;
+      return (await fetchResults({
+        data: { roundId, includeDeleted },
+      })) as {
+        submissions: Submission[];
+        entries: Entry[];
+        roundCountries: { country_code: string; display_order: number }[];
+      };
     },
     enabled: !!roundId,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
   });
 
-  const subIds = (subs.data ?? []).map((s) => s.id);
-
-  const entries = useQuery({
-    queryKey: ["results.entries", roundId, subIds.length],
-    queryFn: async () => {
-      if (subIds.length === 0) return [];
-      const { data, error } = await supabase
-        .from("vote_entries")
-        .select("*")
-        .in("submission_id", subIds);
-      if (error) throw error;
-      return data as Entry[];
-    },
-    enabled: subIds.length > 0,
-  });
-
-  const roundCountries = useQuery({
-    queryKey: ["results.round_countries", roundId],
-    queryFn: async () => {
-      if (!roundId) return [];
-      const { data, error } = await supabase
-        .from("round_countries")
-        .select("country_code,display_order")
-        .eq("round_id", roundId)
-        .order("display_order");
-      if (error) throw error;
-      return data as { country_code: string; display_order: number }[];
-    },
-    enabled: !!roundId,
-  });
-
-  // Realtime: invalidate on any vote change for this round.
+  // Also invalidate on any realtime signal for the round (rounds table updates
+  // e.g. status flips, so admins see the round move to closed instantly).
   useEffect(() => {
     if (!roundId) return;
     const channel = supabase
-      .channel(`results-${roundId}`)
+      .channel(`round-status-${roundId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "vote_submissions", filter: `round_id=eq.${roundId}` },
-        () => {
-          qc.invalidateQueries({ queryKey: ["results.subs", roundId] });
-          qc.invalidateQueries({ queryKey: ["results.entries", roundId] });
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "rounds",
+          filter: `id=eq.${roundId}`,
         },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "vote_entries" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["results.entries", roundId] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "rounds", filter: `id=eq.${roundId}` },
         () => {
           qc.invalidateQueries({ queryKey: ["all-rounds"] });
+          qc.invalidateQueries({ queryKey: ["round-results", roundId] });
         },
       )
       .subscribe();
@@ -150,5 +114,22 @@ export function useRoundResults(roundId: string | null, includeDeleted = false) 
     };
   }, [roundId, qc]);
 
-  return { subs, entries, roundCountries };
+  // Compatibility shims so existing consumers using `subs`, `entries`,
+  // `roundCountries` keep working.
+  return {
+    subs: {
+      data: bundle.data?.submissions ?? [],
+      isLoading: bundle.isLoading,
+    },
+    entries: {
+      data: bundle.data?.entries ?? [],
+      isLoading: bundle.isLoading,
+    },
+    roundCountries: {
+      data: bundle.data?.roundCountries ?? [],
+      isLoading: bundle.isLoading,
+    },
+    refetch: bundle.refetch,
+    isLoading: bundle.isLoading,
+  };
 }
