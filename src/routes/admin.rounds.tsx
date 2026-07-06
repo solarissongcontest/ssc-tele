@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   PlayCircle,
   Plus,
@@ -45,6 +46,12 @@ import {
 import { CountryPickerDialog } from "@/components/country-picker-dialog";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  createRound,
+  renameRound,
+  setRoundStatus,
+  deleteRound,
+} from "@/lib/rounds-admin.functions";
 
 export const Route = createFileRoute("/admin/rounds")({
   head: () => ({ meta: [{ title: "Rounds — Solaris Admin" }] }),
