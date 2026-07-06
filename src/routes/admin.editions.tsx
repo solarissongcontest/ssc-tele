@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { CalendarDays, Plus, Archive, ArchiveRestore, Star, Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminShell } from "@/components/admin-shell";
@@ -16,6 +17,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  createEdition,
+  renameEdition,
+  setEditionArchived,
+  activateEdition,
+} from "@/lib/rounds-admin.functions";
 
 export const Route = createFileRoute("/admin/editions")({
   head: () => ({ meta: [{ title: "Editions — Solaris Admin" }] }),
