@@ -405,10 +405,9 @@ function TelevotePage() {
           <div className="flex flex-wrap gap-3">
             <Button
               onClick={() =>
-                isLocked || needsRecalc === false && round?.results_status === "published"
-                  ? setConfirmOpen(true)
-                  : recalcM.mutate(false)
+                isLocked ? setConfirmOpen(true) : recalcM.mutate(false)
               }
+
               disabled={!effective || recalcM.isPending}
             >
               {recalcM.isPending ? (
