@@ -17,6 +17,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Calculator } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { SolarisLogo } from "./solaris-logo";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ const BASE_NAV = [
   { to: "/admin/editions", label: "Editions", icon: CalendarDays },
   { to: "/admin/rounds", label: "Rounds", icon: PlayCircle },
   { to: "/admin/results", label: "Results", icon: Trophy },
+  { to: "/admin/televote", label: "Televote Conversion", icon: Calculator },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/anti-abuse", label: "Anti-Abuse", icon: ShieldAlert, badgeKey: "moderation" },
   { to: "/admin/detection", label: "Detection", icon: Radar },

@@ -9,11 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResultsRouteImport } from './routes/results'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminThemeRouteImport } from './routes/admin.theme'
+import { Route as AdminTelevoteRouteImport } from './routes/admin.televote'
 import { Route as AdminRoundsRouteImport } from './routes/admin.rounds'
 import { Route as AdminResultsRouteImport } from './routes/admin.results'
 import { Route as AdminEditionsRouteImport } from './routes/admin.editions'
@@ -23,6 +25,11 @@ import { Route as AdminAntiAbuseRouteImport } from './routes/admin.anti-abuse'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 
+const ResultsRoute = ResultsRouteImport.update({
+  id: '/results',
+  path: '/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -46,6 +53,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const AdminThemeRoute = AdminThemeRouteImport.update({
   id: '/theme',
   path: '/theme',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTelevoteRoute = AdminTelevoteRouteImport.update({
+  id: '/televote',
+  path: '/televote',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRoundsRoute = AdminRoundsRouteImport.update({
@@ -93,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -101,12 +114,14 @@ export interface FileRoutesByFullPath {
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
+  '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -115,6 +130,7 @@ export interface FileRoutesByTo {
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
+  '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
   '/admin': typeof AdminIndexRoute
 }
@@ -123,6 +139,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -131,6 +148,7 @@ export interface FileRoutesById {
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
+  '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
   '/admin/': typeof AdminIndexRoute
 }
@@ -140,6 +158,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -148,12 +167,14 @@ export interface FileRouteTypes {
     | '/admin/editions'
     | '/admin/results'
     | '/admin/rounds'
+    | '/admin/televote'
     | '/admin/theme'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -162,6 +183,7 @@ export interface FileRouteTypes {
     | '/admin/editions'
     | '/admin/results'
     | '/admin/rounds'
+    | '/admin/televote'
     | '/admin/theme'
     | '/admin'
   id:
@@ -169,6 +191,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -177,6 +200,7 @@ export interface FileRouteTypes {
     | '/admin/editions'
     | '/admin/results'
     | '/admin/rounds'
+    | '/admin/televote'
     | '/admin/theme'
     | '/admin/'
   fileRoutesById: FileRoutesById
@@ -185,10 +209,18 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ResultsRoute: typeof ResultsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/results': {
+      id: '/results'
+      path: '/results'
+      fullPath: '/results'
+      preLoaderRoute: typeof ResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -222,6 +254,13 @@ declare module '@tanstack/react-router' {
       path: '/theme'
       fullPath: '/admin/theme'
       preLoaderRoute: typeof AdminThemeRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/televote': {
+      id: '/admin/televote'
+      path: '/televote'
+      fullPath: '/admin/televote'
+      preLoaderRoute: typeof AdminTelevoteRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/rounds': {
@@ -292,6 +331,7 @@ interface AdminRouteChildren {
   AdminEditionsRoute: typeof AdminEditionsRoute
   AdminResultsRoute: typeof AdminResultsRoute
   AdminRoundsRoute: typeof AdminRoundsRoute
+  AdminTelevoteRoute: typeof AdminTelevoteRoute
   AdminThemeRoute: typeof AdminThemeRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
@@ -305,6 +345,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminEditionsRoute: AdminEditionsRoute,
   AdminResultsRoute: AdminResultsRoute,
   AdminRoundsRoute: AdminRoundsRoute,
+  AdminTelevoteRoute: AdminTelevoteRoute,
   AdminThemeRoute: AdminThemeRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
@@ -315,17 +356,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRoute,
+  ResultsRoute: ResultsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
