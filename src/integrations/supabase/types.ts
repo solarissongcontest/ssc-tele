@@ -304,35 +304,158 @@ export type Database = {
           },
         ]
       }
+      round_results: {
+        Row: {
+          calculated_at: string
+          calculated_by_username: string | null
+          calculation_version: number
+          country_code: string
+          created_at: string
+          decimal_remainder: number
+          exact_points: number
+          final_points: number
+          floored_points: number
+          id: string
+          original_rank: number
+          original_voters: number
+          original_votes: number
+          participant_count: number
+          rank_base: number
+          rank_exponent: number
+          rank_factor: number
+          remainder_bonus: number
+          round_id: string
+          total_points_to_distribute: number
+          updated_at: string
+          weighted_score: number
+        }
+        Insert: {
+          calculated_at?: string
+          calculated_by_username?: string | null
+          calculation_version: number
+          country_code: string
+          created_at?: string
+          decimal_remainder: number
+          exact_points: number
+          final_points: number
+          floored_points: number
+          id?: string
+          original_rank: number
+          original_voters?: number
+          original_votes?: number
+          participant_count: number
+          rank_base: number
+          rank_exponent: number
+          rank_factor: number
+          remainder_bonus?: number
+          round_id: string
+          total_points_to_distribute: number
+          updated_at?: string
+          weighted_score: number
+        }
+        Update: {
+          calculated_at?: string
+          calculated_by_username?: string | null
+          calculation_version?: number
+          country_code?: string
+          created_at?: string
+          decimal_remainder?: number
+          exact_points?: number
+          final_points?: number
+          floored_points?: number
+          id?: string
+          original_rank?: number
+          original_voters?: number
+          original_votes?: number
+          participant_count?: number
+          rank_base?: number
+          rank_exponent?: number
+          rank_factor?: number
+          remainder_bonus?: number
+          round_id?: string
+          total_points_to_distribute?: number
+          updated_at?: string
+          weighted_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "round_results_country_code_fkey"
+            columns: ["country_code"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "round_results_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rounds: {
         Row: {
+          broadcast_display_mode: string
+          calc_participant_codes: string[] | null
+          calculated_at: string | null
+          calculated_by: string | null
+          calculated_by_username: string | null
+          calculation_version: number
           closed_at: string | null
           created_at: string
           edition_id: string
           id: string
           name: string
           opened_at: string | null
+          public_advanced_transparency: boolean
+          rank_exponent: number
+          results_outdated: boolean
+          results_status: string
           status: Database["public"]["Enums"]["round_status"]
+          total_points_to_distribute: number
           updated_at: string
         }
         Insert: {
+          broadcast_display_mode?: string
+          calc_participant_codes?: string[] | null
+          calculated_at?: string | null
+          calculated_by?: string | null
+          calculated_by_username?: string | null
+          calculation_version?: number
           closed_at?: string | null
           created_at?: string
           edition_id: string
           id?: string
           name: string
           opened_at?: string | null
+          public_advanced_transparency?: boolean
+          rank_exponent?: number
+          results_outdated?: boolean
+          results_status?: string
           status?: Database["public"]["Enums"]["round_status"]
+          total_points_to_distribute?: number
           updated_at?: string
         }
         Update: {
+          broadcast_display_mode?: string
+          calc_participant_codes?: string[] | null
+          calculated_at?: string | null
+          calculated_by?: string | null
+          calculated_by_username?: string | null
+          calculation_version?: number
           closed_at?: string | null
           created_at?: string
           edition_id?: string
           id?: string
           name?: string
           opened_at?: string | null
+          public_advanced_transparency?: boolean
+          rank_exponent?: number
+          results_outdated?: boolean
+          results_status?: string
           status?: Database["public"]["Enums"]["round_status"]
+          total_points_to_distribute?: number
           updated_at?: string
         }
         Relationships: [
