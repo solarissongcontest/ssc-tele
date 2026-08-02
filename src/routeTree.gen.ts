@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as CombinedRouteImport } from './routes/combined'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -20,6 +21,7 @@ import { Route as AdminRoundsRouteImport } from './routes/admin.rounds'
 import { Route as AdminResultsRouteImport } from './routes/admin.results'
 import { Route as AdminEditionsRouteImport } from './routes/admin.editions'
 import { Route as AdminDetectionRouteImport } from './routes/admin.detection'
+import { Route as AdminCombinedRouteImport } from './routes/admin.combined'
 import { Route as AdminAuditLogRouteImport } from './routes/admin.audit-log'
 import { Route as AdminAntiAbuseRouteImport } from './routes/admin.anti-abuse'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
@@ -28,6 +30,11 @@ import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CombinedRoute = CombinedRouteImport.update({
+  id: '/combined',
+  path: '/combined',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -80,6 +87,11 @@ const AdminDetectionRoute = AdminDetectionRouteImport.update({
   path: '/detection',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminCombinedRoute = AdminCombinedRouteImport.update({
+  id: '/combined',
+  path: '/combined',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
   id: '/audit-log',
   path: '/audit-log',
@@ -105,11 +117,13 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/combined': typeof CombinedRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/combined': typeof AdminCombinedRoute
   '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
@@ -121,11 +135,13 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/combined': typeof CombinedRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/combined': typeof AdminCombinedRoute
   '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
@@ -139,11 +155,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/combined': typeof CombinedRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/combined': typeof AdminCombinedRoute
   '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
   '/admin/results': typeof AdminResultsRoute
@@ -158,11 +176,13 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/combined'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
     | '/admin/audit-log'
+    | '/admin/combined'
     | '/admin/detection'
     | '/admin/editions'
     | '/admin/results'
@@ -174,11 +194,13 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/combined'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
     | '/admin/audit-log'
+    | '/admin/combined'
     | '/admin/detection'
     | '/admin/editions'
     | '/admin/results'
@@ -191,11 +213,13 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/combined'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
     | '/admin/audit-log'
+    | '/admin/combined'
     | '/admin/detection'
     | '/admin/editions'
     | '/admin/results'
@@ -209,6 +233,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRoute
+  CombinedRoute: typeof CombinedRoute
   ResultsRoute: typeof ResultsRoute
 }
 
@@ -219,6 +244,13 @@ declare module '@tanstack/react-router' {
       path: '/results'
       fullPath: '/results'
       preLoaderRoute: typeof ResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/combined': {
+      id: '/combined'
+      path: '/combined'
+      fullPath: '/combined'
+      preLoaderRoute: typeof CombinedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -291,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDetectionRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/combined': {
+      id: '/admin/combined'
+      path: '/combined'
+      fullPath: '/admin/combined'
+      preLoaderRoute: typeof AdminCombinedRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/audit-log': {
       id: '/admin/audit-log'
       path: '/audit-log'
@@ -327,6 +366,7 @@ interface AdminRouteChildren {
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminAntiAbuseRoute: typeof AdminAntiAbuseRoute
   AdminAuditLogRoute: typeof AdminAuditLogRoute
+  AdminCombinedRoute: typeof AdminCombinedRoute
   AdminDetectionRoute: typeof AdminDetectionRoute
   AdminEditionsRoute: typeof AdminEditionsRoute
   AdminResultsRoute: typeof AdminResultsRoute
@@ -341,6 +381,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminAntiAbuseRoute: AdminAntiAbuseRoute,
   AdminAuditLogRoute: AdminAuditLogRoute,
+  AdminCombinedRoute: AdminCombinedRoute,
   AdminDetectionRoute: AdminDetectionRoute,
   AdminEditionsRoute: AdminEditionsRoute,
   AdminResultsRoute: AdminResultsRoute,
@@ -356,18 +397,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRoute,
+  CombinedRoute: CombinedRoute,
   ResultsRoute: ResultsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

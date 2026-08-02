@@ -15,6 +15,7 @@ import {
   X,
   Radar,
   FileText,
+  Layers,
 } from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Calculator } from "lucide-react";
@@ -32,6 +33,7 @@ const BASE_NAV = [
   { to: "/admin/rounds", label: "Rounds", icon: PlayCircle },
   { to: "/admin/results", label: "Results", icon: Trophy },
   { to: "/admin/televote", label: "Televote Conversion", icon: Calculator },
+  { to: "/admin/combined", label: "Combined Televote", icon: Layers },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/anti-abuse", label: "Anti-Abuse", icon: ShieldAlert, badgeKey: "moderation" },
   { to: "/admin/detection", label: "Detection", icon: Radar },

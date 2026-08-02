@@ -199,6 +199,105 @@ export type Database = {
           },
         ]
       }
+      combined_televote_results: {
+        Row: {
+          aggregation_id: string
+          calculated_at: string
+          calculation_version: number
+          combined_original_rank: number
+          combined_original_score: number
+          converted_points: number
+          country_code: string
+          created_at: string
+          decimal_remainder: number
+          exact_converted_points: number
+          final_televote_score: number
+          floored_points: number
+          id: string
+          manual_pre_conversion_adjustment: number
+          participant_count: number
+          post_conversion_adjustment: number
+          post_conversion_bonus: number
+          pre_conversion_total: number
+          rank_base: number
+          rank_exponent: number
+          rank_factor: number
+          remainder_bonus: number
+          source_contributions: Json
+          updated_at: string
+          weighted_score: number
+        }
+        Insert: {
+          aggregation_id: string
+          calculated_at?: string
+          calculation_version?: number
+          combined_original_rank?: number
+          combined_original_score?: number
+          converted_points?: number
+          country_code: string
+          created_at?: string
+          decimal_remainder?: number
+          exact_converted_points?: number
+          final_televote_score?: number
+          floored_points?: number
+          id?: string
+          manual_pre_conversion_adjustment?: number
+          participant_count?: number
+          post_conversion_adjustment?: number
+          post_conversion_bonus?: number
+          pre_conversion_total?: number
+          rank_base?: number
+          rank_exponent?: number
+          rank_factor?: number
+          remainder_bonus?: number
+          source_contributions?: Json
+          updated_at?: string
+          weighted_score?: number
+        }
+        Update: {
+          aggregation_id?: string
+          calculated_at?: string
+          calculation_version?: number
+          combined_original_rank?: number
+          combined_original_score?: number
+          converted_points?: number
+          country_code?: string
+          created_at?: string
+          decimal_remainder?: number
+          exact_converted_points?: number
+          final_televote_score?: number
+          floored_points?: number
+          id?: string
+          manual_pre_conversion_adjustment?: number
+          participant_count?: number
+          post_conversion_adjustment?: number
+          post_conversion_bonus?: number
+          pre_conversion_total?: number
+          rank_base?: number
+          rank_exponent?: number
+          rank_factor?: number
+          remainder_bonus?: number
+          source_contributions?: Json
+          updated_at?: string
+          weighted_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combined_televote_results_aggregation_id_fkey"
+            columns: ["aggregation_id"]
+            isOneToOne: false
+            referencedRelation: "televote_aggregations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combined_televote_results_country_code_fkey"
+            columns: ["country_code"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       countries: {
         Row: {
           code: string
@@ -244,6 +343,99 @@ export type Database = {
           is_archived?: boolean
           name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      external_score_entries: {
+        Row: {
+          country_code: string
+          created_at: string
+          entered_by: string | null
+          entry_type: string
+          id: string
+          reason: string | null
+          source_id: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          country_code: string
+          created_at?: string
+          entered_by?: string | null
+          entry_type?: string
+          id?: string
+          reason?: string | null
+          source_id: string
+          updated_at?: string
+          value?: number
+        }
+        Update: {
+          country_code?: string
+          created_at?: string
+          entered_by?: string | null
+          entry_type?: string
+          id?: string
+          reason?: string | null
+          source_id?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_score_entries_country_code_fkey"
+            columns: ["country_code"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "external_score_entries_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "televote_aggregation_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_score_entry_log: {
+        Row: {
+          actor_username: string | null
+          aggregation_id: string | null
+          country_code: string | null
+          created_at: string
+          delta: number | null
+          entry_type: string | null
+          id: string
+          new_value: number | null
+          previous_value: number | null
+          reason: string | null
+          source_id: string | null
+        }
+        Insert: {
+          actor_username?: string | null
+          aggregation_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          delta?: number | null
+          entry_type?: string | null
+          id?: string
+          new_value?: number | null
+          previous_value?: number | null
+          reason?: string | null
+          source_id?: string | null
+        }
+        Update: {
+          actor_username?: string | null
+          aggregation_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          delta?: number | null
+          entry_type?: string | null
+          id?: string
+          new_value?: number | null
+          previous_value?: number | null
+          reason?: string | null
+          source_id?: string | null
         }
         Relationships: []
       }
@@ -461,6 +653,173 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "rounds_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "editions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      televote_aggregation_participants: {
+        Row: {
+          aggregation_id: string
+          country_code: string
+          created_at: string
+          display_order: number
+          id: string
+        }
+        Insert: {
+          aggregation_id: string
+          country_code: string
+          created_at?: string
+          display_order?: number
+          id?: string
+        }
+        Update: {
+          aggregation_id?: string
+          country_code?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "televote_aggregation_participants_aggregation_id_fkey"
+            columns: ["aggregation_id"]
+            isOneToOne: false
+            referencedRelation: "televote_aggregations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "televote_aggregation_participants_country_code_fkey"
+            columns: ["country_code"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      televote_aggregation_sources: {
+        Row: {
+          aggregation_id: string
+          calculation_stage: string
+          created_at: string
+          display_order: number
+          enabled: boolean
+          id: string
+          source_name: string
+          source_round_id: string | null
+          source_type: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          aggregation_id: string
+          calculation_stage?: string
+          created_at?: string
+          display_order?: number
+          enabled?: boolean
+          id?: string
+          source_name: string
+          source_round_id?: string | null
+          source_type?: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          aggregation_id?: string
+          calculation_stage?: string
+          created_at?: string
+          display_order?: number
+          enabled?: boolean
+          id?: string
+          source_name?: string
+          source_round_id?: string | null
+          source_type?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "televote_aggregation_sources_aggregation_id_fkey"
+            columns: ["aggregation_id"]
+            isOneToOne: false
+            referencedRelation: "televote_aggregations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "televote_aggregation_sources_source_round_id_fkey"
+            columns: ["source_round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      televote_aggregations: {
+        Row: {
+          broadcast_display_mode: string
+          calculated_at: string | null
+          calculated_by: string | null
+          calculated_by_username: string | null
+          calculation_version: number
+          combination_method: string
+          created_at: string
+          edition_id: string | null
+          id: string
+          locked_at: string | null
+          name: string
+          public_columns: Json
+          published_at: string | null
+          rank_exponent: number
+          results_outdated: boolean
+          status: string
+          total_points_to_distribute: number
+          updated_at: string
+        }
+        Insert: {
+          broadcast_display_mode?: string
+          calculated_at?: string | null
+          calculated_by?: string | null
+          calculated_by_username?: string | null
+          calculation_version?: number
+          combination_method?: string
+          created_at?: string
+          edition_id?: string | null
+          id?: string
+          locked_at?: string | null
+          name: string
+          public_columns?: Json
+          published_at?: string | null
+          rank_exponent?: number
+          results_outdated?: boolean
+          status?: string
+          total_points_to_distribute?: number
+          updated_at?: string
+        }
+        Update: {
+          broadcast_display_mode?: string
+          calculated_at?: string | null
+          calculated_by?: string | null
+          calculated_by_username?: string | null
+          calculation_version?: number
+          combination_method?: string
+          created_at?: string
+          edition_id?: string | null
+          id?: string
+          locked_at?: string | null
+          name?: string
+          public_columns?: Json
+          published_at?: string | null
+          rank_exponent?: number
+          results_outdated?: boolean
+          status?: string
+          total_points_to_distribute?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "televote_aggregations_edition_id_fkey"
             columns: ["edition_id"]
             isOneToOne: false
             referencedRelation: "editions"
