@@ -243,7 +243,7 @@ export async function validateCombinedForPublication(aggregationId: string) {
     .from("combined_televote_results" as any)
     .select("country_code,converted_points,final_televote_score,calculation_version")
     .eq("aggregation_id", aggregationId);
-  const rows = ((data ?? []) as any[]) ?? [];
+  const rows = (data ?? []) as any[];
   const codes = new Set(rows.map((r) => r.country_code));
   for (const c of participants)
     if (!codes.has(c)) problems.push(`Missing result row for ${c}`);
