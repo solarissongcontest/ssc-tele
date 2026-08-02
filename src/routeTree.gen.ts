@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as CombinedRouteImport } from './routes/combined'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +30,11 @@ import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CombinedRoute = CombinedRouteImport.update({
+  id: '/combined',
+  path: '/combined',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/combined': typeof CombinedRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/combined': typeof CombinedRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/combined': typeof CombinedRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/combined'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/combined'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/combined'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
@@ -221,6 +233,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRoute
+  CombinedRoute: typeof CombinedRoute
   ResultsRoute: typeof ResultsRoute
 }
 
@@ -231,6 +244,13 @@ declare module '@tanstack/react-router' {
       path: '/results'
       fullPath: '/results'
       preLoaderRoute: typeof ResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/combined': {
+      id: '/combined'
+      path: '/combined'
+      fullPath: '/combined'
+      preLoaderRoute: typeof CombinedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -377,6 +397,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRoute,
+  CombinedRoute: CombinedRoute,
   ResultsRoute: ResultsRoute,
 }
 export const routeTree = rootRouteImport

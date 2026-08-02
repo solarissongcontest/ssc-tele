@@ -12,12 +12,20 @@ export function PublicShell({ children }: { children: ReactNode }) {
           <Link to="/" className="hover:opacity-80 transition">
             <SolarisLogo />
           </Link>
+          <div className="flex items-center gap-1">
+          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+            <Link to="/results">Results</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+            <Link to="/combined">Combined</Link>
+          </Button>
           <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
             <Link to="/auth">
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Admin</span>
             </Link>
           </Button>
+          </div>
         </div>
       </header>
       <main className="flex-1 mx-auto max-w-3xl w-full px-4 py-6 sm:py-10">{children}</main>
