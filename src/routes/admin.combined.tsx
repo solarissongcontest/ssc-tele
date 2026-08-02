@@ -411,7 +411,7 @@ function CombinedPage() {
                 <Button
                   variant="ghost"
                   onClick={() =>
-                    downloadCSV(exportRows(), `${agg.name}-combined-televote`)
+                    downloadCSV(`${agg.name}-combined-televote.csv`, exportRows())
                   }
                 >
                   <Download className="h-4 w-4" /> CSV
@@ -419,10 +419,11 @@ function CombinedPage() {
                 <Button
                   variant="ghost"
                   onClick={() =>
-                    downloadJSON(
-                      { aggregation: agg, sources, preview },
-                      `${agg.name}-combined-audit`,
-                    )
+                    downloadJSON(`${agg.name}-combined-audit.json`, {
+                      aggregation: agg,
+                      sources,
+                      preview,
+                    })
                   }
                 >
                   Audit JSON
