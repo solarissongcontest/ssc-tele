@@ -478,6 +478,14 @@ function DoneCard({
           </ul>
         </div>
       )}
+
+      {confirmation && (
+        <Button variant="outline" className="w-full h-11" onClick={share}>
+          <Share2 className="h-4 w-4" />
+          Share my vote
+        </Button>
+      )}
+
     </section>
   );
 }
