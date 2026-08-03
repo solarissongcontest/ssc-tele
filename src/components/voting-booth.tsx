@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Minus, Plus, Vote, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, Minus, Plus, Vote, Sparkles, CheckCircle2, AlertTriangle, Search, RotateCcw, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,7 @@ export function VotingBooth({
   const [username, setUsername] = useState("");
   const [home, setHome] = useState<string>("");
   const [points, setPoints] = useState<Record<string, number>>({});
+  const [search, setSearch] = useState("");
   const [confirmation, setConfirmation] = useState<{
     username: string;
     home: string;
