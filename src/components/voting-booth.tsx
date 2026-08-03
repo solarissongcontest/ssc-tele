@@ -419,8 +419,28 @@ function DoneCard({
   byCode: Map<string, CountryShape>;
 }) {
   const homeCountry = confirmation ? byCode.get(confirmation.home) : null;
+
+  const share = async () => {
+    if (!confirmation) return;
+    const lines = confirmation.breakdown
+      .map((b) => `${b.points} — ${countryName(byCode.get(b.code))}`)
+      .join("\n");
+    const text = `My ${editionName ? editionName + " " : ""}${roundName} televote:\n${lines}\n#GETTINGHIGH`;
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: "My Solaris televote", text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      toast.success("Vote summary copied to clipboard");
+    } catch {
+      /* user dismissed the share sheet — nothing to do */
+    }
+  };
+
   return (
-    <section className="glass-strong rounded-2xl p-6 sm:p-8 max-w-xl mx-auto space-y-5 text-center">
+    <section className="glass-strong rounded-2xl p-6 sm:p-8 max-w-xl mx-auto space-y-5 text-center animate-pop-in">
+
       <div className="mx-auto h-14 w-14 rounded-2xl bg-hero grid place-items-center shadow-glow">
         <CheckCircle2 className="h-7 w-7 text-primary-foreground" />
       </div>
