@@ -1,3 +1,6 @@
+import { EmptyState } from "@/components/empty-state";
+import { TableSkeleton } from "@/components/panel-skeleton";
+import { Trophy } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -66,16 +69,14 @@ function PublicResultsPage() {
           )}
         </header>
 
-        {isLoading && (
-          <p className="text-center text-sm text-muted-foreground">Loading results…</p>
-        )}
+        {isLoading && <TableSkeleton rows={8} />}
 
         {!isLoading && !round && (
-          <div className="glass rounded-3xl p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              No results have been published yet. Check back after the show.
-            </p>
-          </div>
+          <EmptyState
+            icon={Trophy}
+            title="No results published yet"
+            description="Published televote scoreboards appear here right after the show."
+          />
         )}
 
         {round && (

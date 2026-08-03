@@ -9,12 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as HowToVoteRouteImport } from './routes/how-to-vote'
 import { Route as CombinedRouteImport } from './routes/combined'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EditionsIndexRouteImport } from './routes/editions.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as EditionsEditionIdRouteImport } from './routes/editions.$editionId'
 import { Route as AdminThemeRouteImport } from './routes/admin.theme'
 import { Route as AdminTelevoteRouteImport } from './routes/admin.televote'
 import { Route as AdminRoundsRouteImport } from './routes/admin.rounds'
@@ -27,9 +31,19 @@ import { Route as AdminAntiAbuseRouteImport } from './routes/admin.anti-abuse'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HowToVoteRoute = HowToVoteRouteImport.update({
+  id: '/how-to-vote',
+  path: '/how-to-vote',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CombinedRoute = CombinedRouteImport.update({
@@ -52,10 +66,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EditionsIndexRoute = EditionsIndexRouteImport.update({
+  id: '/editions/',
+  path: '/editions/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
+} as any)
+const EditionsEditionIdRoute = EditionsEditionIdRouteImport.update({
+  id: '/editions/$editionId',
+  path: '/editions/$editionId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminThemeRoute = AdminThemeRouteImport.update({
   id: '/theme',
@@ -118,7 +142,9 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/combined': typeof CombinedRoute
+  '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -130,13 +156,17 @@ export interface FileRoutesByFullPath {
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
+  '/editions/$editionId': typeof EditionsEditionIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/editions/': typeof EditionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/combined': typeof CombinedRoute
+  '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -148,7 +178,9 @@ export interface FileRoutesByTo {
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
+  '/editions/$editionId': typeof EditionsEditionIdRoute
   '/admin': typeof AdminIndexRoute
+  '/editions': typeof EditionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -156,7 +188,9 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/combined': typeof CombinedRoute
+  '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -168,7 +202,9 @@ export interface FileRoutesById {
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
+  '/editions/$editionId': typeof EditionsEditionIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/editions/': typeof EditionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -177,7 +213,9 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/combined'
+    | '/how-to-vote'
     | '/results'
+    | '/sitemap.xml'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -189,13 +227,17 @@ export interface FileRouteTypes {
     | '/admin/rounds'
     | '/admin/televote'
     | '/admin/theme'
+    | '/editions/$editionId'
     | '/admin/'
+    | '/editions/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/combined'
+    | '/how-to-vote'
     | '/results'
+    | '/sitemap.xml'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -207,14 +249,18 @@ export interface FileRouteTypes {
     | '/admin/rounds'
     | '/admin/televote'
     | '/admin/theme'
+    | '/editions/$editionId'
     | '/admin'
+    | '/editions'
   id:
     | '__root__'
     | '/'
     | '/admin'
     | '/auth'
     | '/combined'
+    | '/how-to-vote'
     | '/results'
+    | '/sitemap.xml'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -226,7 +272,9 @@ export interface FileRouteTypes {
     | '/admin/rounds'
     | '/admin/televote'
     | '/admin/theme'
+    | '/editions/$editionId'
     | '/admin/'
+    | '/editions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -234,16 +282,34 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRoute
   CombinedRoute: typeof CombinedRoute
+  HowToVoteRoute: typeof HowToVoteRoute
   ResultsRoute: typeof ResultsRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  EditionsEditionIdRoute: typeof EditionsEditionIdRoute
+  EditionsIndexRoute: typeof EditionsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/results': {
       id: '/results'
       path: '/results'
       fullPath: '/results'
       preLoaderRoute: typeof ResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/how-to-vote': {
+      id: '/how-to-vote'
+      path: '/how-to-vote'
+      fullPath: '/how-to-vote'
+      preLoaderRoute: typeof HowToVoteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/combined': {
@@ -274,12 +340,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/editions/': {
+      id: '/editions/'
+      path: '/editions'
+      fullPath: '/editions/'
+      preLoaderRoute: typeof EditionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/editions/$editionId': {
+      id: '/editions/$editionId'
+      path: '/editions/$editionId'
+      fullPath: '/editions/$editionId'
+      preLoaderRoute: typeof EditionsEditionIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/theme': {
       id: '/admin/theme'
@@ -398,18 +478,12 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRoute,
   CombinedRoute: CombinedRoute,
+  HowToVoteRoute: HowToVoteRoute,
   ResultsRoute: ResultsRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  EditionsEditionIdRoute: EditionsEditionIdRoute,
+  EditionsIndexRoute: EditionsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

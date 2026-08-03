@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Sparkles, Vote, Loader2 } from "lucide-react";
+import { Sparkles, Vote } from "lucide-react";
+import { PanelSkeleton, TableSkeleton } from "@/components/panel-skeleton";
 import { PublicShell } from "@/components/public-shell";
 import { VotingBooth } from "@/components/voting-booth";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,7 +85,7 @@ function PublicHome() {
 
   return (
     <PublicShell>
-      <section className="relative text-center pt-6 pb-10">
+      <section className="relative text-center pt-6 pb-10 animate-fade-in">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs uppercase tracking-widest bg-card border border-border text-muted-foreground mb-5">
           <Sparkles className="h-3 w-3 text-primary" />
           #GETTINGHIGH
@@ -101,10 +102,12 @@ function PublicHome() {
       </section>
 
       {isLoading ? (
-        <div className="glass-strong rounded-2xl p-10 text-center">
-          <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+        <div className="space-y-4">
+          <PanelSkeleton lines={2} />
+          <TableSkeleton rows={6} />
         </div>
       ) : !data ? (
+
         <ClosedCard />
       ) : data.countries.length === 0 ? (
         <EmptyRoundCard roundName={data.name} />
