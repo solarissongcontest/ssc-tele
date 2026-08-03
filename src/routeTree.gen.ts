@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as HowToVoteRouteImport } from './routes/how-to-vote'
 import { Route as CombinedRouteImport } from './routes/combined'
@@ -30,6 +31,11 @@ import { Route as AdminAntiAbuseRouteImport } from './routes/admin.anti-abuse'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/combined': typeof CombinedRoute
   '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -159,6 +166,7 @@ export interface FileRoutesByTo {
   '/combined': typeof CombinedRoute
   '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -182,6 +190,7 @@ export interface FileRoutesById {
   '/combined': typeof CombinedRoute
   '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/anti-abuse': typeof AdminAntiAbuseRoute
@@ -206,6 +215,7 @@ export interface FileRouteTypes {
     | '/combined'
     | '/how-to-vote'
     | '/results'
+    | '/sitemap.xml'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
     | '/combined'
     | '/how-to-vote'
     | '/results'
+    | '/sitemap.xml'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -249,6 +260,7 @@ export interface FileRouteTypes {
     | '/combined'
     | '/how-to-vote'
     | '/results'
+    | '/sitemap.xml'
     | '/admin/accounts'
     | '/admin/analytics'
     | '/admin/anti-abuse'
@@ -272,12 +284,20 @@ export interface RootRouteChildren {
   CombinedRoute: typeof CombinedRoute
   HowToVoteRoute: typeof HowToVoteRoute
   ResultsRoute: typeof ResultsRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   EditionsEditionIdRoute: typeof EditionsEditionIdRoute
   EditionsIndexRoute: typeof EditionsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/results': {
       id: '/results'
       path: '/results'
@@ -460,6 +480,7 @@ const rootRouteChildren: RootRouteChildren = {
   CombinedRoute: CombinedRoute,
   HowToVoteRoute: HowToVoteRoute,
   ResultsRoute: ResultsRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   EditionsEditionIdRoute: EditionsEditionIdRoute,
   EditionsIndexRoute: EditionsIndexRoute,
 }

@@ -389,3 +389,37 @@ select:focus-visible {
   letter-spacing: 0.02em;
 }
 
+
+/* ── Motion & feedback utilities ─────────────────────────────────── */
+@keyframes solaris-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes solaris-pop-in {
+  0% { opacity: 0; transform: scale(0.94); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@utility animate-fade-in {
+  animation: solaris-fade-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-pop-in {
+  animation: solaris-pop-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Visible keyboard focus everywhere, matching the glass rim */
+:where(a, button, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid oklch(0.9 0.13 190 / 0.85);
+  outline-offset: 2px;
+  border-radius: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
