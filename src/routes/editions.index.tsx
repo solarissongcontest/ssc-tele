@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { PanelSkeleton } from "@/components/panel-skeleton";
 import { listPublicEditions } from "@/lib/archive.functions";
 
-export const Route = createFileRoute("/editions")({
+export const Route = createFileRoute("/editions/")({
   head: () => ({
     meta: [
       { title: "Contest Archive — Solaris Song Contest Televote" },

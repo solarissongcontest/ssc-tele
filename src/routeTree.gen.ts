@@ -14,6 +14,7 @@ import { Route as CombinedRouteImport } from './routes/combined'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EditionsIndexRouteImport } from './routes/editions.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminThemeRouteImport } from './routes/admin.theme'
 import { Route as AdminTelevoteRouteImport } from './routes/admin.televote'
@@ -50,6 +51,11 @@ const AdminRoute = AdminRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditionsIndexRoute = EditionsIndexRouteImport.update({
+  id: '/editions/',
+  path: '/editions/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
   '/admin/': typeof AdminIndexRoute
+  '/editions/': typeof EditionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByTo {
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
   '/admin': typeof AdminIndexRoute
+  '/editions': typeof EditionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -169,6 +177,7 @@ export interface FileRoutesById {
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
   '/admin/': typeof AdminIndexRoute
+  '/editions/': typeof EditionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/admin/televote'
     | '/admin/theme'
     | '/admin/'
+    | '/editions/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -208,6 +218,7 @@ export interface FileRouteTypes {
     | '/admin/televote'
     | '/admin/theme'
     | '/admin'
+    | '/editions'
   id:
     | '__root__'
     | '/'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/admin/televote'
     | '/admin/theme'
     | '/admin/'
+    | '/editions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -235,6 +247,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   CombinedRoute: typeof CombinedRoute
   ResultsRoute: typeof ResultsRoute
+  EditionsIndexRoute: typeof EditionsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -272,6 +285,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editions/': {
+      id: '/editions/'
+      path: '/editions'
+      fullPath: '/editions/'
+      preLoaderRoute: typeof EditionsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -399,6 +419,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   CombinedRoute: CombinedRoute,
   ResultsRoute: ResultsRoute,
+  EditionsIndexRoute: EditionsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
