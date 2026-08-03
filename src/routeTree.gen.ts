@@ -10,12 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as HowToVoteRouteImport } from './routes/how-to-vote'
 import { Route as CombinedRouteImport } from './routes/combined'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EditionsIndexRouteImport } from './routes/editions.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as EditionsEditionIdRouteImport } from './routes/editions.$editionId'
 import { Route as AdminThemeRouteImport } from './routes/admin.theme'
 import { Route as AdminTelevoteRouteImport } from './routes/admin.televote'
 import { Route as AdminRoundsRouteImport } from './routes/admin.rounds'
@@ -31,6 +33,11 @@ import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HowToVoteRoute = HowToVoteRouteImport.update({
+  id: '/how-to-vote',
+  path: '/how-to-vote',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CombinedRoute = CombinedRouteImport.update({
@@ -62,6 +69,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
+} as any)
+const EditionsEditionIdRoute = EditionsEditionIdRouteImport.update({
+  id: '/editions/$editionId',
+  path: '/editions/$editionId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminThemeRoute = AdminThemeRouteImport.update({
   id: '/theme',
@@ -124,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/combined': typeof CombinedRoute
+  '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
@@ -136,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
+  '/editions/$editionId': typeof EditionsEditionIdRoute
   '/admin/': typeof AdminIndexRoute
   '/editions/': typeof EditionsIndexRoute
 }
@@ -143,6 +157,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/combined': typeof CombinedRoute
+  '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
@@ -155,6 +170,7 @@ export interface FileRoutesByTo {
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
+  '/editions/$editionId': typeof EditionsEditionIdRoute
   '/admin': typeof AdminIndexRoute
   '/editions': typeof EditionsIndexRoute
 }
@@ -164,6 +180,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/combined': typeof CombinedRoute
+  '/how-to-vote': typeof HowToVoteRoute
   '/results': typeof ResultsRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
@@ -176,6 +193,7 @@ export interface FileRoutesById {
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
   '/admin/theme': typeof AdminThemeRoute
+  '/editions/$editionId': typeof EditionsEditionIdRoute
   '/admin/': typeof AdminIndexRoute
   '/editions/': typeof EditionsIndexRoute
 }
@@ -186,6 +204,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/combined'
+    | '/how-to-vote'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
@@ -198,6 +217,7 @@ export interface FileRouteTypes {
     | '/admin/rounds'
     | '/admin/televote'
     | '/admin/theme'
+    | '/editions/$editionId'
     | '/admin/'
     | '/editions/'
   fileRoutesByTo: FileRoutesByTo
@@ -205,6 +225,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/combined'
+    | '/how-to-vote'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
@@ -217,6 +238,7 @@ export interface FileRouteTypes {
     | '/admin/rounds'
     | '/admin/televote'
     | '/admin/theme'
+    | '/editions/$editionId'
     | '/admin'
     | '/editions'
   id:
@@ -225,6 +247,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/combined'
+    | '/how-to-vote'
     | '/results'
     | '/admin/accounts'
     | '/admin/analytics'
@@ -237,6 +260,7 @@ export interface FileRouteTypes {
     | '/admin/rounds'
     | '/admin/televote'
     | '/admin/theme'
+    | '/editions/$editionId'
     | '/admin/'
     | '/editions/'
   fileRoutesById: FileRoutesById
@@ -246,7 +270,9 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRoute
   CombinedRoute: typeof CombinedRoute
+  HowToVoteRoute: typeof HowToVoteRoute
   ResultsRoute: typeof ResultsRoute
+  EditionsEditionIdRoute: typeof EditionsEditionIdRoute
   EditionsIndexRoute: typeof EditionsIndexRoute
 }
 
@@ -257,6 +283,13 @@ declare module '@tanstack/react-router' {
       path: '/results'
       fullPath: '/results'
       preLoaderRoute: typeof ResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/how-to-vote': {
+      id: '/how-to-vote'
+      path: '/how-to-vote'
+      fullPath: '/how-to-vote'
+      preLoaderRoute: typeof HowToVoteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/combined': {
@@ -300,6 +333,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/editions/$editionId': {
+      id: '/editions/$editionId'
+      path: '/editions/$editionId'
+      fullPath: '/editions/$editionId'
+      preLoaderRoute: typeof EditionsEditionIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/theme': {
       id: '/admin/theme'
@@ -418,7 +458,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRoute,
   CombinedRoute: CombinedRoute,
+  HowToVoteRoute: HowToVoteRoute,
   ResultsRoute: ResultsRoute,
+  EditionsEditionIdRoute: EditionsEditionIdRoute,
   EditionsIndexRoute: EditionsIndexRoute,
 }
 export const routeTree = rootRouteImport
