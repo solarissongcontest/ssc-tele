@@ -101,10 +101,12 @@ function PublicHome() {
       </section>
 
       {isLoading ? (
-        <div className="glass-strong rounded-2xl p-10 text-center">
-          <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+        <div className="space-y-4">
+          <PanelSkeleton lines={2} />
+          <TableSkeleton rows={6} />
         </div>
       ) : !data ? (
+
         <ClosedCard />
       ) : data.countries.length === 0 ? (
         <EmptyRoundCard roundName={data.name} />

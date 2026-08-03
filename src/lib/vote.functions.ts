@@ -50,6 +50,7 @@ export const submitVote = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
+    const { enforceRateLimit } = await import("@/lib/rate-limit.server");
 
     let ipHash: string | null = null;
     try {
@@ -58,11 +59,20 @@ export const submitVote = createServerFn({ method: "POST" })
     } catch {
       /* ignore */
     }
+
+    // Burst protection in front of the durable duplicate checks in submit_vote.
+    enforceRateLimit(`vote:${ipHash ?? data.deviceTokenHash ?? "anon"}`, {
+      limit: 8,
+      windowMs: 60_000,
+      message: "Too many vote attempts from this connection. Please wait a moment.",
+    });
+
     const ipCountry =
       getRequestHeader("cf-ipcountry") ??
       getRequestHeader("x-vercel-ip-country") ??
       null;
     const isVpn = detectVpn();
+
 
     const { data: result, error } = await supabaseAdmin.rpc(
       "submit_vote" as any,
