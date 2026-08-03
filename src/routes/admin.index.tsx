@@ -10,6 +10,8 @@ import {
   ShieldAlert,
   Users,
 } from "lucide-react";
+import { StatCounter } from "@/components/stat-counter";
+import { StatsSkeleton } from "@/components/panel-skeleton";
 import { getOverviewStats } from "@/lib/admin-data.functions";
 
 export const Route = createFileRoute("/admin/")({
@@ -94,15 +96,18 @@ function AdminOverview() {
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             At a glance
           </h3>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {isLoading && !data && <StatsSkeleton count={6} />}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4" hidden={isLoading && !data}>
             {stats.map((s) => {
               const Icon = s.icon;
               const display =
-                isLoading || s.value === undefined
-                  ? "…"
-                  : s.isText
-                    ? String(s.value)
-                    : new Intl.NumberFormat().format(Number(s.value));
+                s.value === undefined ? (
+                  "…"
+                ) : s.isText ? (
+                  String(s.value)
+                ) : (
+                  <StatCounter value={Number(s.value)} />
+                );
               return (
                 <Link
                   key={s.label}
