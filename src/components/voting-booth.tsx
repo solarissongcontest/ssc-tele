@@ -233,6 +233,15 @@ export function VotingBooth({
   const canSubmit = used === TOTAL && countriesUsed >= MIN_COUNTRIES;
   const homeCountry = byCode.get(home);
 
+  const visible = sorted.filter((c) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.country.name.toLowerCase().includes(q) ||
+      c.country.code.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <section className="space-y-5">
       <div className="glass-strong rounded-2xl p-4 sm:p-5 sticky top-3 z-10 backdrop-blur-xl">
@@ -269,6 +278,19 @@ export function VotingBooth({
             </Badge>
           </div>
         </div>
+        <div
+          className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={TOTAL}
+          aria-valuenow={Math.min(used, TOTAL)}
+          aria-label="Points distributed"
+        >
+          <div
+            className="h-full bg-hero transition-all duration-300"
+            style={{ width: `${Math.min(100, (used / TOTAL) * 100)}%` }}
+          />
+        </div>
         {used > TOTAL && (
           <div className="mt-2 text-xs flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-3.5 w-3.5" /> Too many points distributed.
@@ -276,8 +298,37 @@ export function VotingBooth({
         )}
       </div>
 
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search countries…"
+            aria-label="Search countries in this round"
+            className="pl-9"
+          />
+        </div>
+        <Button
+          variant="outline"
+          className="shrink-0"
+          disabled={used === 0}
+          onClick={() => setPoints({})}
+        >
+          <RotateCcw className="h-4 w-4" />
+          <span className="hidden sm:inline">Reset</span>
+        </Button>
+      </div>
+
+      {visible.length === 0 && (
+        <p className="text-center text-sm text-muted-foreground py-6">
+          No countries match “{search}”.
+        </p>
+      )}
+
       <ul className="grid grid-cols-1 gap-2.5">
-        {sorted.map((c) => {
+        {visible.map((c) => {
+
           const code = c.country.code;
           const isHome = code === home;
           const p = points[code] ?? 0;
