@@ -12,20 +12,27 @@ export function PublicShell({ children }: { children: ReactNode }) {
           <Link to="/" className="hover:opacity-80 transition">
             <SolarisLogo />
           </Link>
-          <div className="flex items-center gap-1">
-          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+          <nav className="flex items-center gap-0.5 sm:gap-1" aria-label="Main">
+          <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3 text-muted-foreground hover:text-foreground">
             <Link to="/results">Results</Link>
           </Button>
-          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+          <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3 text-muted-foreground hover:text-foreground">
             <Link to="/combined">Combined</Link>
           </Button>
-          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+          <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3 text-muted-foreground hover:text-foreground">
+            <Link to="/editions">Archive</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex px-3 text-muted-foreground hover:text-foreground">
+            <Link to="/how-to-vote">How to vote</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3 text-muted-foreground hover:text-foreground">
             <Link to="/auth">
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Admin</span>
             </Link>
           </Button>
-          </div>
+          </nav>
+
         </div>
       </header>
       <main className="flex-1 mx-auto max-w-3xl w-full px-4 py-6 sm:py-10">{children}</main>
