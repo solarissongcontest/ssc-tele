@@ -23,6 +23,7 @@ import { Route as AdminThemeRouteImport } from './routes/admin.theme'
 import { Route as AdminTelevoteRouteImport } from './routes/admin.televote'
 import { Route as AdminRoundsRouteImport } from './routes/admin.rounds'
 import { Route as AdminResultsRouteImport } from './routes/admin.results'
+import { Route as AdminFriendVotingRouteImport } from './routes/admin.friend-voting'
 import { Route as AdminEditionsRouteImport } from './routes/admin.editions'
 import { Route as AdminDetectionRouteImport } from './routes/admin.detection'
 import { Route as AdminCombinedRouteImport } from './routes/admin.combined'
@@ -101,6 +102,11 @@ const AdminResultsRoute = AdminResultsRouteImport.update({
   path: '/results',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminFriendVotingRoute = AdminFriendVotingRouteImport.update({
+  id: '/friend-voting',
+  path: '/friend-voting',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminEditionsRoute = AdminEditionsRouteImport.update({
   id: '/editions',
   path: '/editions',
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/admin/combined': typeof AdminCombinedRoute
   '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
+  '/admin/friend-voting': typeof AdminFriendVotingRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/admin/combined': typeof AdminCombinedRoute
   '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
+  '/admin/friend-voting': typeof AdminFriendVotingRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/admin/combined': typeof AdminCombinedRoute
   '/admin/detection': typeof AdminDetectionRoute
   '/admin/editions': typeof AdminEditionsRoute
+  '/admin/friend-voting': typeof AdminFriendVotingRoute
   '/admin/results': typeof AdminResultsRoute
   '/admin/rounds': typeof AdminRoundsRoute
   '/admin/televote': typeof AdminTelevoteRoute
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/admin/combined'
     | '/admin/detection'
     | '/admin/editions'
+    | '/admin/friend-voting'
     | '/admin/results'
     | '/admin/rounds'
     | '/admin/televote'
@@ -245,6 +255,7 @@ export interface FileRouteTypes {
     | '/admin/combined'
     | '/admin/detection'
     | '/admin/editions'
+    | '/admin/friend-voting'
     | '/admin/results'
     | '/admin/rounds'
     | '/admin/televote'
@@ -268,6 +279,7 @@ export interface FileRouteTypes {
     | '/admin/combined'
     | '/admin/detection'
     | '/admin/editions'
+    | '/admin/friend-voting'
     | '/admin/results'
     | '/admin/rounds'
     | '/admin/televote'
@@ -389,6 +401,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminResultsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/friend-voting': {
+      id: '/admin/friend-voting'
+      path: '/friend-voting'
+      fullPath: '/admin/friend-voting'
+      preLoaderRoute: typeof AdminFriendVotingRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/editions': {
       id: '/admin/editions'
       path: '/editions'
@@ -449,6 +468,7 @@ interface AdminRouteChildren {
   AdminCombinedRoute: typeof AdminCombinedRoute
   AdminDetectionRoute: typeof AdminDetectionRoute
   AdminEditionsRoute: typeof AdminEditionsRoute
+  AdminFriendVotingRoute: typeof AdminFriendVotingRoute
   AdminResultsRoute: typeof AdminResultsRoute
   AdminRoundsRoute: typeof AdminRoundsRoute
   AdminTelevoteRoute: typeof AdminTelevoteRoute
@@ -464,6 +484,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCombinedRoute: AdminCombinedRoute,
   AdminDetectionRoute: AdminDetectionRoute,
   AdminEditionsRoute: AdminEditionsRoute,
+  AdminFriendVotingRoute: AdminFriendVotingRoute,
   AdminResultsRoute: AdminResultsRoute,
   AdminRoundsRoute: AdminRoundsRoute,
   AdminTelevoteRoute: AdminTelevoteRoute,
