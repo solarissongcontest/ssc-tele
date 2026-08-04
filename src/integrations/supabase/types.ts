@@ -439,6 +439,273 @@ export type Database = {
         }
         Relationships: []
       }
+      friend_voting_groups: {
+        Row: {
+          analysis_version: number
+          average_external_support: number
+          average_internal_support: number
+          calculated_at: string
+          created_at: string
+          deleted_internal_ballots: number
+          edges: Json
+          editions_observed: number
+          group_reciprocity: number
+          id: string
+          internal_maximum_share: number
+          internal_point_share: number
+          internal_top_three_share: number
+          label: string
+          members: string[]
+          moderator_note: string | null
+          reasons: Json
+          repeated_after_moderation: number
+          review_status: string
+          risk_label: string
+          risk_score: number
+          rounds_observed: number
+          strong_internal_edges: number
+          updated_at: string
+        }
+        Insert: {
+          analysis_version?: number
+          average_external_support?: number
+          average_internal_support?: number
+          calculated_at?: string
+          created_at?: string
+          deleted_internal_ballots?: number
+          edges?: Json
+          editions_observed?: number
+          group_reciprocity?: number
+          id?: string
+          internal_maximum_share?: number
+          internal_point_share?: number
+          internal_top_three_share?: number
+          label: string
+          members?: string[]
+          moderator_note?: string | null
+          reasons?: Json
+          repeated_after_moderation?: number
+          review_status?: string
+          risk_label?: string
+          risk_score?: number
+          rounds_observed?: number
+          strong_internal_edges?: number
+          updated_at?: string
+        }
+        Update: {
+          analysis_version?: number
+          average_external_support?: number
+          average_internal_support?: number
+          calculated_at?: string
+          created_at?: string
+          deleted_internal_ballots?: number
+          edges?: Json
+          editions_observed?: number
+          group_reciprocity?: number
+          id?: string
+          internal_maximum_share?: number
+          internal_point_share?: number
+          internal_top_three_share?: number
+          label?: string
+          members?: string[]
+          moderator_note?: string | null
+          reasons?: Json
+          repeated_after_moderation?: number
+          review_status?: string
+          risk_label?: string
+          risk_score?: number
+          rounds_observed?: number
+          strong_internal_edges?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      friend_voting_relationships: {
+        Row: {
+          active_maximum_score_count: number
+          active_opportunities: number
+          active_points: number
+          analysis_version: number
+          audience_uplift: number
+          average_ballot_rank: number | null
+          average_points: number
+          average_points_supported: number
+          calculated_at: string
+          clique_score: number
+          created_at: string
+          current_support_streak: number
+          deleted_maximum_score_count: number
+          deleted_opportunities: number
+          deleted_points: number
+          editions_count: number
+          first_support_at: string | null
+          id: string
+          last_maximum_at: string | null
+          last_support_at: string | null
+          longest_support_streak: number
+          maximum_score_count: number
+          maximum_score_frequency: number
+          moderator_note: string | null
+          normalized_audience_uplift: number
+          preference_lift: number
+          previous_coordination_deletions: number
+          previous_duplicate_deletions: number
+          previous_friend_vote_deletions: number
+          reasons: Json
+          reciprocity_score: number
+          repeated_after_moderation: boolean
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          risk_label: string
+          risk_score: number
+          rounds_count: number
+          second_score_count: number
+          shared_opportunities: number
+          support_count: number
+          support_frequency: number
+          target_country_code: string
+          timeline: Json
+          top_score_concentration: number
+          top_three_count: number
+          top_three_frequency: number
+          total_points: number
+          updated_at: string
+          voting_country_code: string
+        }
+        Insert: {
+          active_maximum_score_count?: number
+          active_opportunities?: number
+          active_points?: number
+          analysis_version?: number
+          audience_uplift?: number
+          average_ballot_rank?: number | null
+          average_points?: number
+          average_points_supported?: number
+          calculated_at?: string
+          clique_score?: number
+          created_at?: string
+          current_support_streak?: number
+          deleted_maximum_score_count?: number
+          deleted_opportunities?: number
+          deleted_points?: number
+          editions_count?: number
+          first_support_at?: string | null
+          id?: string
+          last_maximum_at?: string | null
+          last_support_at?: string | null
+          longest_support_streak?: number
+          maximum_score_count?: number
+          maximum_score_frequency?: number
+          moderator_note?: string | null
+          normalized_audience_uplift?: number
+          preference_lift?: number
+          previous_coordination_deletions?: number
+          previous_duplicate_deletions?: number
+          previous_friend_vote_deletions?: number
+          reasons?: Json
+          reciprocity_score?: number
+          repeated_after_moderation?: boolean
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_label?: string
+          risk_score?: number
+          rounds_count?: number
+          second_score_count?: number
+          shared_opportunities?: number
+          support_count?: number
+          support_frequency?: number
+          target_country_code: string
+          timeline?: Json
+          top_score_concentration?: number
+          top_three_count?: number
+          top_three_frequency?: number
+          total_points?: number
+          updated_at?: string
+          voting_country_code: string
+        }
+        Update: {
+          active_maximum_score_count?: number
+          active_opportunities?: number
+          active_points?: number
+          analysis_version?: number
+          audience_uplift?: number
+          average_ballot_rank?: number | null
+          average_points?: number
+          average_points_supported?: number
+          calculated_at?: string
+          clique_score?: number
+          created_at?: string
+          current_support_streak?: number
+          deleted_maximum_score_count?: number
+          deleted_opportunities?: number
+          deleted_points?: number
+          editions_count?: number
+          first_support_at?: string | null
+          id?: string
+          last_maximum_at?: string | null
+          last_support_at?: string | null
+          longest_support_streak?: number
+          maximum_score_count?: number
+          maximum_score_frequency?: number
+          moderator_note?: string | null
+          normalized_audience_uplift?: number
+          preference_lift?: number
+          previous_coordination_deletions?: number
+          previous_duplicate_deletions?: number
+          previous_friend_vote_deletions?: number
+          reasons?: Json
+          reciprocity_score?: number
+          repeated_after_moderation?: boolean
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_label?: string
+          risk_score?: number
+          rounds_count?: number
+          second_score_count?: number
+          shared_opportunities?: number
+          support_count?: number
+          support_frequency?: number
+          target_country_code?: string
+          timeline?: Json
+          top_score_concentration?: number
+          top_three_count?: number
+          top_three_frequency?: number
+          total_points?: number
+          updated_at?: string
+          voting_country_code?: string
+        }
+        Relationships: []
+      }
+      friend_voting_settings: {
+        Row: {
+          created_at: string
+          id: string
+          settings: Json
+          singleton: boolean
+          updated_at: string
+          updated_by_username: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          settings?: Json
+          singleton?: boolean
+          updated_at?: string
+          updated_by_username?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          settings?: Json
+          singleton?: boolean
+          updated_at?: string
+          updated_by_username?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -874,12 +1141,67 @@ export type Database = {
           },
         ]
       }
+      vote_moderation_events: {
+        Row: {
+          action: string
+          id: string
+          moderator_note: string | null
+          new_status: string | null
+          performed_at: string
+          performed_by: string | null
+          performed_by_username: string | null
+          previous_status: string | null
+          reason_category: string | null
+          target_country_code: string | null
+          vote_submission_id: string | null
+          voting_country_code: string | null
+        }
+        Insert: {
+          action: string
+          id?: string
+          moderator_note?: string | null
+          new_status?: string | null
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_username?: string | null
+          previous_status?: string | null
+          reason_category?: string | null
+          target_country_code?: string | null
+          vote_submission_id?: string | null
+          voting_country_code?: string | null
+        }
+        Update: {
+          action?: string
+          id?: string
+          moderator_note?: string | null
+          new_status?: string | null
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_username?: string | null
+          previous_status?: string | null
+          reason_category?: string | null
+          target_country_code?: string | null
+          vote_submission_id?: string | null
+          voting_country_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vote_moderation_events_vote_submission_id_fkey"
+            columns: ["vote_submission_id"]
+            isOneToOne: false
+            referencedRelation: "vote_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vote_submissions: {
         Row: {
           country_code: string
           created_at: string
           deleted_at: string | null
           deleted_by: string | null
+          deletion_category: string | null
+          deletion_reason: string | null
           device_token_hash: string | null
           edited_at: string | null
           edited_by: string | null
@@ -902,6 +1224,8 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           deleted_by?: string | null
+          deletion_category?: string | null
+          deletion_reason?: string | null
           device_token_hash?: string | null
           edited_at?: string | null
           edited_by?: string | null
@@ -924,6 +1248,8 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           deleted_by?: string | null
+          deletion_category?: string | null
+          deletion_reason?: string | null
           device_token_hash?: string | null
           edited_at?: string | null
           edited_by?: string | null
