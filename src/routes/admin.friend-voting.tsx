@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/empty-state";
 import { TableSkeleton } from "@/components/panel-skeleton";
-import { CountryFlag } from "@/components/country-flag";
 import { toast } from "sonner";
 import {
   listFriendVotingRelationships,
@@ -254,7 +253,7 @@ function FriendVotingPage() {
               <EmptyState
                 icon={Heart}
                 title="No relationship data yet"
-                body="Run the analysis to build the historical relationship dataset."
+                description="Run the analysis to build the historical relationship dataset."
               />
             ) : (
               <div className="glass-strong overflow-x-auto rounded-2xl p-2">
@@ -283,13 +282,11 @@ function FriendVotingPage() {
                       >
                         <td className="py-2 pl-2 pr-3">
                           <span className="inline-flex items-center gap-1.5 font-medium">
-                            <CountryFlag code={r.voting_country_code} className="h-4 w-6" />
                             {r.voting_country_code}
                           </span>
                         </td>
                         <td className="py-2 pr-3">
                           <span className="inline-flex items-center gap-1.5">
-                            <CountryFlag code={r.target_country_code} className="h-4 w-6" />
                             {r.target_country_code}
                           </span>
                         </td>
@@ -348,7 +345,7 @@ function FriendVotingPage() {
               <EmptyState
                 icon={Users}
                 title="No friend groups detected"
-                body="Groups appear when three or more delegations repeatedly exchange their highest scores."
+                description="Groups appear when three or more delegations repeatedly exchange their highest scores."
               />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -405,7 +402,7 @@ function FriendVotingPage() {
               <EmptyState
                 icon={History}
                 title="No moderation history"
-                body="Every moderation action on a ballot or relationship is recorded here permanently."
+                description="Every moderation action on a ballot or relationship is recorded here permanently."
               />
             ) : (
               <div className="glass-strong overflow-x-auto rounded-2xl p-2">
