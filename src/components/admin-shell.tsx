@@ -37,6 +37,7 @@ const BASE_NAV = [
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/anti-abuse", label: "Anti-Abuse", icon: ShieldAlert, badgeKey: "moderation" },
   { to: "/admin/detection", label: "Detection", icon: Radar },
+  { to: "/admin/friend-voting", label: "Friend-Voting", icon: Radar },
   { to: "/admin/theme", label: "Theme", icon: Palette },
 ] as const;
 
