@@ -258,6 +258,9 @@ export const upsertSource = createServerFn({ method: "POST" })
       sourceName?: string;
       stage?: "pre_conversion" | "post_conversion";
       weight?: number;
+      percentageWeight?: number;
+      correctionTargetSourceId?: string | null;
+      correctionScope?: "source" | "final";
       enabled?: boolean;
       displayOrder?: number;
     }) => {
@@ -268,6 +271,16 @@ export const upsertSource = createServerFn({ method: "POST" })
         throw new Error("Invalid calculation stage");
       if (data.weight !== undefined && !Number.isFinite(Number(data.weight)))
         throw new Error("Weight must be a number");
+      if (data.percentageWeight !== undefined) {
+        const p = Number(data.percentageWeight);
+        if (!Number.isFinite(p) || p < 0 || p > 100)
+          throw new Error("Percentage weight must be between 0 and 100");
+      }
+      if (
+        data.correctionScope !== undefined &&
+        !["source", "final"].includes(data.correctionScope)
+      )
+        throw new Error("Invalid correction scope");
       return data;
     },
   )
@@ -275,13 +288,28 @@ export const upsertSource = createServerFn({ method: "POST" })
     const actor = await requireAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const patch: Record<string, unknown> = { aggregation_id: data.aggregationId };
-    if (data.sourceType !== undefined) patch.source_type = data.sourceType;
+    if (data.sourceType !== undefined) {
+      patch.source_type = data.sourceType;
+      patch.calculation_method =
+        data.sourceType === "activity"
+          ? "proportional"
+          : data.sourceType === "correction"
+            ? "adjustment"
+            : "rank_weighted";
+    }
     if (data.sourceRoundId !== undefined) patch.source_round_id = data.sourceRoundId;
     if (data.sourceName !== undefined) patch.source_name = data.sourceName.trim();
     if (data.stage !== undefined) patch.calculation_stage = data.stage;
     if (data.weight !== undefined) patch.weight = Number(data.weight);
+    if (data.percentageWeight !== undefined)
+      patch.percentage_weight = Number(data.percentageWeight);
+    if (data.correctionTargetSourceId !== undefined)
+      patch.correction_target_source_id = data.correctionTargetSourceId;
+    if (data.correctionScope !== undefined)
+      patch.correction_scope = data.correctionScope;
     if (data.enabled !== undefined) patch.enabled = data.enabled;
     if (data.displayOrder !== undefined) patch.display_order = data.displayOrder;
+
 
     if (data.id) {
       const { error } = await supabaseAdmin
