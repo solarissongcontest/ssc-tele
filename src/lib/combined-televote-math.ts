@@ -116,7 +116,7 @@ export type CombinedCountryResult = {
     tied: boolean;
     resolvedBy?: string;
     decidingSourceId?: string | null;
-    comparedValues?: unknown;
+    comparedValues?: Record<string, number>;
   };
 };
 
