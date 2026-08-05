@@ -199,6 +199,115 @@ export type Database = {
           },
         ]
       }
+      combined_televote_component_results: {
+        Row: {
+          aggregation_id: string
+          calculated_at: string
+          calculation_version: number
+          component_id: string
+          component_name: string
+          component_pool: number
+          component_type: string
+          country_code: string
+          created_at: string
+          decimal_remainder: number
+          exact_allocation: number
+          final_allocated_points: number
+          floored_allocation: number
+          id: string
+          method: string
+          participant_count: number
+          percentage_weight: number
+          rank_base: number | null
+          rank_exponent: number | null
+          rank_factor: number | null
+          raw_rank: number | null
+          raw_score: number
+          remainder_bonus: number
+          source_weighted_total: number | null
+          tie_break_data: Json
+          weighted_score: number | null
+        }
+        Insert: {
+          aggregation_id: string
+          calculated_at?: string
+          calculation_version?: number
+          component_id: string
+          component_name?: string
+          component_pool?: number
+          component_type?: string
+          country_code: string
+          created_at?: string
+          decimal_remainder?: number
+          exact_allocation?: number
+          final_allocated_points?: number
+          floored_allocation?: number
+          id?: string
+          method?: string
+          participant_count?: number
+          percentage_weight?: number
+          rank_base?: number | null
+          rank_exponent?: number | null
+          rank_factor?: number | null
+          raw_rank?: number | null
+          raw_score?: number
+          remainder_bonus?: number
+          source_weighted_total?: number | null
+          tie_break_data?: Json
+          weighted_score?: number | null
+        }
+        Update: {
+          aggregation_id?: string
+          calculated_at?: string
+          calculation_version?: number
+          component_id?: string
+          component_name?: string
+          component_pool?: number
+          component_type?: string
+          country_code?: string
+          created_at?: string
+          decimal_remainder?: number
+          exact_allocation?: number
+          final_allocated_points?: number
+          floored_allocation?: number
+          id?: string
+          method?: string
+          participant_count?: number
+          percentage_weight?: number
+          rank_base?: number | null
+          rank_exponent?: number | null
+          rank_factor?: number | null
+          raw_rank?: number | null
+          raw_score?: number
+          remainder_bonus?: number
+          source_weighted_total?: number | null
+          tie_break_data?: Json
+          weighted_score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combined_televote_component_results_aggregation_id_fkey"
+            columns: ["aggregation_id"]
+            isOneToOne: false
+            referencedRelation: "televote_aggregations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combined_televote_component_results_component_id_fkey"
+            columns: ["component_id"]
+            isOneToOne: false
+            referencedRelation: "televote_aggregation_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combined_televote_component_results_country_code_fkey"
+            columns: ["country_code"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       combined_televote_results: {
         Row: {
           aggregation_id: string
@@ -206,12 +315,17 @@ export type Database = {
           calculation_version: number
           combined_original_rank: number
           combined_original_score: number
+          component_breakdown: Json
           converted_points: number
           country_code: string
           created_at: string
           decimal_remainder: number
           exact_converted_points: number
+          final_combined_points: number
+          final_correction: number
+          final_rank: number
           final_televote_score: number
+          final_tie_break_data: Json
           floored_points: number
           id: string
           manual_pre_conversion_adjustment: number
@@ -224,6 +338,8 @@ export type Database = {
           rank_factor: number
           remainder_bonus: number
           source_contributions: Json
+          total_activity_points: number
+          total_voting_points: number
           updated_at: string
           weighted_score: number
         }
@@ -233,12 +349,17 @@ export type Database = {
           calculation_version?: number
           combined_original_rank?: number
           combined_original_score?: number
+          component_breakdown?: Json
           converted_points?: number
           country_code: string
           created_at?: string
           decimal_remainder?: number
           exact_converted_points?: number
+          final_combined_points?: number
+          final_correction?: number
+          final_rank?: number
           final_televote_score?: number
+          final_tie_break_data?: Json
           floored_points?: number
           id?: string
           manual_pre_conversion_adjustment?: number
@@ -251,6 +372,8 @@ export type Database = {
           rank_factor?: number
           remainder_bonus?: number
           source_contributions?: Json
+          total_activity_points?: number
+          total_voting_points?: number
           updated_at?: string
           weighted_score?: number
         }
@@ -260,12 +383,17 @@ export type Database = {
           calculation_version?: number
           combined_original_rank?: number
           combined_original_score?: number
+          component_breakdown?: Json
           converted_points?: number
           country_code?: string
           created_at?: string
           decimal_remainder?: number
           exact_converted_points?: number
+          final_combined_points?: number
+          final_correction?: number
+          final_rank?: number
           final_televote_score?: number
+          final_tie_break_data?: Json
           floored_points?: number
           id?: string
           manual_pre_conversion_adjustment?: number
@@ -278,6 +406,8 @@ export type Database = {
           rank_factor?: number
           remainder_bonus?: number
           source_contributions?: Json
+          total_activity_points?: number
+          total_voting_points?: number
           updated_at?: string
           weighted_score?: number
         }
@@ -969,40 +1099,70 @@ export type Database = {
       televote_aggregation_sources: {
         Row: {
           aggregation_id: string
+          calculation_method: string
           calculation_stage: string
+          correction_scope: string
+          correction_target_source_id: string | null
           created_at: string
           display_order: number
           enabled: boolean
+          exact_point_pool: number
+          final_point_pool: number
+          floored_point_pool: number
           id: string
+          percentage_weight: number
+          pool_remainder: number
+          pool_remainder_bonus: number
           source_name: string
           source_round_id: string | null
           source_type: string
+          tie_break_data: Json
           updated_at: string
           weight: number
         }
         Insert: {
           aggregation_id: string
+          calculation_method?: string
           calculation_stage?: string
+          correction_scope?: string
+          correction_target_source_id?: string | null
           created_at?: string
           display_order?: number
           enabled?: boolean
+          exact_point_pool?: number
+          final_point_pool?: number
+          floored_point_pool?: number
           id?: string
+          percentage_weight?: number
+          pool_remainder?: number
+          pool_remainder_bonus?: number
           source_name: string
           source_round_id?: string | null
           source_type?: string
+          tie_break_data?: Json
           updated_at?: string
           weight?: number
         }
         Update: {
           aggregation_id?: string
+          calculation_method?: string
           calculation_stage?: string
+          correction_scope?: string
+          correction_target_source_id?: string | null
           created_at?: string
           display_order?: number
           enabled?: boolean
+          exact_point_pool?: number
+          final_point_pool?: number
+          floored_point_pool?: number
           id?: string
+          percentage_weight?: number
+          pool_remainder?: number
+          pool_remainder_bonus?: number
           source_name?: string
           source_round_id?: string | null
           source_type?: string
+          tie_break_data?: Json
           updated_at?: string
           weight?: number
         }
@@ -1012,6 +1172,13 @@ export type Database = {
             columns: ["aggregation_id"]
             isOneToOne: false
             referencedRelation: "televote_aggregations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "televote_aggregation_sources_correction_target_source_id_fkey"
+            columns: ["correction_target_source_id"]
+            isOneToOne: false
+            referencedRelation: "televote_aggregation_sources"
             referencedColumns: ["id"]
           },
           {
