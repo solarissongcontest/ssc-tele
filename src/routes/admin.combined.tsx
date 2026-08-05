@@ -586,7 +586,7 @@ function CombinedPage() {
                 <h3 className="text-base font-semibold">Combined result preview</h3>
                 {preview && (
                   <p className="text-xs text-muted-foreground">
-                    Converted total {preview.distributedConverted} / T{" "}
+                    Allocated {preview.allocatedTotal} / G{" "}
                     {preview.totalPoints} · Final total {num(preview.finalTotal)}
                   </p>
                 )}
