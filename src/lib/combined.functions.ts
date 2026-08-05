@@ -602,22 +602,27 @@ export const getPublishedCombined = createServerFn({ method: "POST" })
       .from("combined_televote_results" as any)
       .select("*")
       .eq("aggregation_id", agg.id)
-      .order("final_televote_score", { ascending: false });
+      .eq("calculation_version", agg.calculation_version)
+      .order("final_rank", { ascending: true });
 
     const shaped = ((rows ?? []) as any[]).map((r) => ({
       country_code: r.country_code,
-      converted_points: cols.converted !== false ? r.converted_points : null,
+      final_rank: r.final_rank,
+      converted_points:
+        cols.converted !== false ? Number(r.total_voting_points ?? 0) : null,
       bonus_points:
         cols.bonus !== false
-          ? Number(r.post_conversion_bonus) + Number(r.post_conversion_adjustment)
+          ? Number(r.total_activity_points ?? 0) + Number(r.final_correction ?? 0)
           : null,
-      final_televote_score: cols.final !== false ? Number(r.final_televote_score) : null,
+      final_televote_score:
+        cols.final !== false ? Number(r.final_combined_points ?? 0) : null,
       combined_original_score: cols.combined_original
-        ? Number(r.combined_original_score)
+        ? Number(r.total_voting_points ?? 0) + Number(r.total_activity_points ?? 0)
         : null,
-      combined_original_rank: cols.combined_original ? r.combined_original_rank : null,
+      combined_original_rank: cols.combined_original ? r.final_rank : null,
       source_contributions: cols.sources ? r.source_contributions : null,
     }));
+
 
     return {
       aggregation: {
