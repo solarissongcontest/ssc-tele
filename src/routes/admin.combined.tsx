@@ -524,16 +524,20 @@ function CombinedPage() {
                         </SelectContent>
                       </Select>
                       <div className="flex items-center gap-1">
-                        <Label className="text-xs">Weight</Label>
+                        <Label className="text-xs">Weight %</Label>
                         <Input
-                          className="w-20"
-                          defaultValue={String(s.weight)}
+                          className="w-24"
+                          defaultValue={String(s.percentage_weight ?? 0)}
                           onBlur={(e) =>
-                            Number(e.target.value) !== Number(s.weight) &&
-                            sourceMut.mutate({ id: s.id, weight: Number(e.target.value) })
+                            Number(e.target.value) !== Number(s.percentage_weight) &&
+                            sourceMut.mutate({
+                              id: s.id,
+                              percentageWeight: Number(e.target.value),
+                            })
                           }
                         />
                       </div>
+
                       <Badge variant="outline" className="text-[10px]">
                         {SOURCE_TYPES.find((t) => t.value === s.source_type)?.label ??
                           s.source_type}
