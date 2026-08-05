@@ -470,7 +470,7 @@ export const recalculateCombined = createServerFn({ method: "POST" })
     return {
       version,
       calculatedAt,
-      distributedConverted: result.distributedConverted,
+      allocatedTotal: result.allocatedTotal,
       finalTotal: result.finalTotal,
       totalPoints: result.totalPoints,
       warnings: result.warnings,
