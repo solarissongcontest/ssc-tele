@@ -603,45 +603,54 @@ function CombinedPage() {
                     <tr>
                       <th className="py-2 pr-3">#</th>
                       <th className="py-2 pr-3">Country</th>
-                      {sources.map((s: any) => (
-                        <th key={s.id} className="py-2 pr-3 text-right">
-                          {s.source_name}
+                      {(preview?.pools ?? []).map((p: any) => (
+                        <th key={p.sourceId} className="py-2 pr-3 text-right">
+                          {p.sourceName}
+                          <span className="block text-[10px] normal-case text-muted-foreground">
+                            {num(p.percentageWeight)}% · {p.finalPool} pts
+                          </span>
                         </th>
                       ))}
-                      <th className="py-2 pr-3 text-right">Pre adj.</th>
-                      <th className="py-2 pr-3 text-right">Combined</th>
-                      <th className="py-2 pr-3 text-right">Rank</th>
-                      <th className="py-2 pr-3 text-right">Converted</th>
-                      <th className="py-2 pr-3 text-right">Bonus</th>
+                      <th className="py-2 pr-3 text-right">Voting</th>
+                      <th className="py-2 pr-3 text-right">Activity</th>
+                      <th className="py-2 pr-3 text-right">Correction</th>
                       <th className="py-2 pr-3 text-right">Final</th>
                       <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {(preview?.rows ?? []).map((r: any, i: number) => {
+                    {(preview?.rows ?? []).map((r: any) => {
                       const c = byCode.get(r.code);
                       const open = expanded === r.code;
+                      const comp = (id: string) =>
+                        r.componentResults.find((x: any) => x.sourceId === id);
                       return (
                         <>
                           <tr key={r.code} className="border-t border-white/5">
-                            <td className="py-2 pr-3 tabular-nums">{i + 1}</td>
+                            <td className="py-2 pr-3 tabular-nums">{r.finalRank}</td>
                             <td className="py-2 pr-3">
                               <span className="flex items-center gap-2">
                                 <CountryFlag country={c} size={18} />
                                 {countryName(c) || r.code}
                               </span>
                             </td>
-                            {sources.map((s: any) => {
-                              const contrib = r.contributions.find(
-                                (x: any) => x.source_id === s.id,
-                              );
+                            {(preview?.pools ?? []).map((p: any) => {
+                              const cr = comp(p.sourceId);
                               return (
                                 <td
-                                  key={s.id}
+                                  key={p.sourceId}
                                   className="py-2 pr-3 text-right tabular-nums"
                                 >
-                                  {contrib ? (
-                                    num(contrib.raw_value)
+                                  {cr ? (
+                                    <>
+                                      <span className="font-medium">
+                                        {cr.finalAllocatedPoints}
+                                      </span>
+                                      <span className="block text-[10px] text-muted-foreground">
+                                        raw {num(cr.rawScore)}
+                                        {cr.rawRank ? ` · #${cr.rawRank}` : ""}
+                                      </span>
+                                    </>
                                   ) : (
                                     <span className="text-muted-foreground">0*</span>
                                   )}
@@ -649,22 +658,16 @@ function CombinedPage() {
                               );
                             })}
                             <td className="py-2 pr-3 text-right tabular-nums">
-                              {num(r.manualPreConversionAdjustment)}
+                              {r.totalVotingPoints}
                             </td>
                             <td className="py-2 pr-3 text-right tabular-nums">
-                              {num(r.combinedOriginalScore)}
+                              {r.totalActivityPoints}
                             </td>
                             <td className="py-2 pr-3 text-right tabular-nums">
-                              {r.combinedOriginalRank}
+                              {num(r.finalCorrection)}
                             </td>
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {r.convertedPoints}
-                            </td>
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {num(r.postConversionBonus + r.postConversionAdjustment)}
-                            </td>
-                            <td className="py-2 pr-3 text-right font-semibold tabular-nums">
-                              {num(r.finalTelevoteScore)}
+                            <td className="py-2 pr-3 text-right text-base font-semibold tabular-nums">
+                              {r.finalCombinedPoints}
                             </td>
                             <td>
                               <button
@@ -679,40 +682,64 @@ function CombinedPage() {
                           </tr>
                           {open && (
                             <tr key={r.code + "-d"} className="bg-white/[0.03]">
-                              <td colSpan={9 + sources.length} className="p-3 text-xs">
-                                <div className="grid gap-1 sm:grid-cols-2">
-                                  <span>Rank base B = {r.rankBase}</span>
-                                  <span>
-                                    Rank factor = ({r.rankBase} − {r.combinedOriginalRank}
-                                    )^{r.rankExponent} = {num(r.rankFactor, 4)}
-                                  </span>
-                                  <span>Weighted score = {num(r.weightedScore, 4)}</span>
-                                  <span>
-                                    Exact quota = {num(r.exactConvertedPoints, 6)}
-                                  </span>
-                                  <span>
-                                    Floored {r.flooredPoints} + remainder bonus{" "}
-                                    {r.remainderBonus} = {r.convertedPoints}
-                                  </span>
-                                  <span>
-                                    Final = {r.convertedPoints} +{" "}
-                                    {num(r.postConversionBonus)} +{" "}
-                                    {num(r.postConversionAdjustment)} ={" "}
-                                    {num(r.finalTelevoteScore)}
-                                  </span>
-                                </div>
-                                <div className="mt-2 space-y-1">
-                                  {r.contributions.map((ct: any) => (
-                                    <div key={ct.source_id}>
-                                      {ct.source_name} ({ct.stage.replace("_", " ")}) ·
-                                      raw {num(ct.raw_value)} × weight {ct.weight} ={" "}
-                                      {num(ct.contribution, 4)}
-                                      {agg.combination_method === "normalized" &&
-                                        ct.stage === "pre_conversion" &&
-                                        ` · share ${num(ct.share, 5)}`}
-                                    </div>
-                                  ))}
-                                </div>
+                              <td
+                                colSpan={7 + (preview?.pools ?? []).length}
+                                className="p-3 text-xs space-y-2"
+                              >
+                                {r.componentResults.map((cr: any) => (
+                                  <div key={cr.sourceId} className="space-y-0.5">
+                                    <p className="text-foreground font-medium">
+                                      {cr.sourceName} —{" "}
+                                      {cr.method === "rank_weighted"
+                                        ? "rank-weighted"
+                                        : "proportional"}{" "}
+                                      · pool{" "}
+                                      {(preview?.pools ?? []).find(
+                                        (p: any) => p.sourceId === cr.sourceId,
+                                      )?.finalPool ?? 0}
+                                    </p>
+                                    {cr.method === "rank_weighted" ? (
+                                      <p>
+                                        Rank #{cr.rawRank} · factor = ({cr.rankBase} −{" "}
+                                        {cr.rawRank})^{cr.rankExponent} ={" "}
+                                        {num(cr.rankFactor, 4)} · weighted{" "}
+                                        {num(cr.weightedScore, 4)} /{" "}
+                                        {num(cr.sourceWeightedTotal, 4)}
+                                      </p>
+                                    ) : (
+                                      <p>
+                                        Share = {num(cr.rawScore)} /{" "}
+                                        {num(cr.sourceRawTotal)}
+                                      </p>
+                                    )}
+                                    <p>
+                                      Exact {num(cr.exactAllocation, 6)} → floored{" "}
+                                      {cr.flooredAllocation} + remainder bonus{" "}
+                                      {cr.remainderBonus} = {cr.finalAllocatedPoints}
+                                    </p>
+                                    {cr.tieBreakData?.rawTie && (
+                                      <p className="text-amber-300">
+                                        Tie on raw score — resolved by{" "}
+                                        {String(
+                                          cr.tieBreakData.rankResolvedBy ?? "raw score",
+                                        ).replace(/_/g, " ")}
+                                        {cr.tieBreakData.distribution
+                                          ? ` (${cr.tieBreakData.distribution.slice(0, 8).join(", ")})`
+                                          : ""}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                                <p className="border-t border-white/10 pt-2">
+                                  Final = voting {r.totalVotingPoints} + activity{" "}
+                                  {r.totalActivityPoints} + correction{" "}
+                                  {num(r.finalCorrection)} = {r.finalCombinedPoints}
+                                </p>
+                                {r.finalTieBreakData?.tied && (
+                                  <p className="text-amber-300">
+                                    Final tie resolved by {r.finalTieBreakData.resolvedBy}
+                                  </p>
+                                )}
                               </td>
                             </tr>
                           )}
@@ -726,6 +753,7 @@ function CombinedPage() {
                 0* = the country is missing from that source and is counted as zero.
               </p>
             </section>
+
 
             {/* Manual entry audit */}
             {log.length > 0 && (
