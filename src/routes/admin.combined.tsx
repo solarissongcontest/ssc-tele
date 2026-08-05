@@ -213,23 +213,23 @@ function CombinedPage() {
   const locked = agg?.status === "locked" || agg?.status === "published";
 
   const exportRows = () =>
-    (preview?.rows ?? []).map((r: any, i: number) => ({
-      rank: i + 1,
+    (preview?.rows ?? []).map((r: any) => ({
+      rank: r.finalRank,
       country: countryName(byCode.get(r.code)) || r.code,
       code: r.code,
-      combined_original: r.combinedOriginalScore,
-      combined_rank: r.combinedOriginalRank,
-      converted_points: r.convertedPoints,
-      bonus: r.postConversionBonus,
-      adjustment: r.postConversionAdjustment,
-      final: r.finalTelevoteScore,
+      voting_points: r.totalVotingPoints,
+      activity_points: r.totalActivityPoints,
+      correction: r.finalCorrection,
+      final: r.finalCombinedPoints,
       ...Object.fromEntries(
-        (sources ?? []).map((s: any) => [
-          `src_${s.source_name}`,
-          r.contributions.find((c: any) => c.source_id === s.id)?.raw_value ?? 0,
+        (preview?.pools ?? []).map((p: any) => [
+          `pool_${p.sourceName}`,
+          r.componentResults.find((c: any) => c.sourceId === p.sourceId)
+            ?.finalAllocatedPoints ?? 0,
         ]),
       ),
     }));
+
 
   return (
     <AdminShell title="Combined Televote">
