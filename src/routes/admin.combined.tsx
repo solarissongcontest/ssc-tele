@@ -317,24 +317,25 @@ function CombinedPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Combination method</Label>
-                  <Select
-                    value={agg.combination_method}
-                    onValueChange={(v) => updateMut.mutate({ combinationMethod: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="raw">
-                        Raw values — add source values directly
-                      </SelectItem>
-                      <SelectItem value="normalized">
-                        Normalized shares — equal influence per source
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Component weights</Label>
+                  <div className="rounded-2xl border border-white/10 px-3 py-2 text-sm">
+                    {preview ? (
+                      <span
+                        className={
+                          Math.abs(preview.totalPercentage - 100) < 1e-6
+                            ? "text-foreground"
+                            : "text-amber-300"
+                        }
+                      >
+                        Enabled components total {num(preview.totalPercentage)}% — must
+                        be exactly 100%
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Loading…</span>
+                    )}
+                  </div>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Total televote points (T)</Label>
                   <div className="flex gap-2">
