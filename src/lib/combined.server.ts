@@ -144,9 +144,29 @@ export async function resolveSourceValues(
   }
 
   for (const s of sources) {
+    const mode = resolveInputMode({
+      type: s.source_type,
+      inputMode: s.input_mode ?? undefined,
+    });
     let values: Record<string, number> = {};
     let distributions: Record<string, number[]> | undefined;
-    if (s.source_round_id) {
+    if (s.source_round_id && mode === "converted_points") {
+      // Already-converted televote points are taken as-is; they are never
+      // rank-weighted a second time.
+      const { data } = await supabaseAdmin
+        .from("round_results")
+        .select("country_code,final_points,calculation_version")
+        .eq("round_id", s.source_round_id);
+      const rows = (data ?? []) as any[];
+      const latest = rows.reduce(
+        (m, r) => Math.max(m, Number(r.calculation_version) || 0),
+        0,
+      );
+      for (const r of rows) {
+        if ((Number(r.calculation_version) || 0) !== latest) continue;
+        values[r.country_code] = Number(r.final_points) || 0;
+      }
+    } else if (s.source_round_id) {
       const totals = await loadOriginalTotals(s.source_round_id, participants);
       totals.forEach((t) => {
         values[t.code] = t.originalVotes;
@@ -160,6 +180,7 @@ export async function resolveSourceValues(
       id: s.id,
       name: s.source_name,
       type: s.source_type,
+      inputMode: mode,
       percentageWeight: Number(s.percentage_weight ?? 0),
       enabled: s.enabled,
       displayOrder: s.display_order,
@@ -169,6 +190,7 @@ export async function resolveSourceValues(
       correctionScope: (s.correction_scope ?? "final") as CorrectionScope,
     });
   }
+
   return out;
 }
 
