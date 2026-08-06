@@ -299,13 +299,6 @@ export type Database = {
             referencedRelation: "televote_aggregation_sources"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "combined_televote_component_results_country_code_fkey"
-            columns: ["country_code"]
-            isOneToOne: false
-            referencedRelation: "countries"
-            referencedColumns: ["code"]
-          },
         ]
       }
       combined_televote_results: {
@@ -419,13 +412,6 @@ export type Database = {
             referencedRelation: "televote_aggregations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "combined_televote_results_country_code_fkey"
-            columns: ["country_code"]
-            isOneToOne: false
-            referencedRelation: "countries"
-            referencedColumns: ["code"]
-          },
         ]
       }
       countries: {
@@ -511,13 +497,6 @@ export type Database = {
           value?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "external_score_entries_country_code_fkey"
-            columns: ["country_code"]
-            isOneToOne: false
-            referencedRelation: "countries"
-            referencedColumns: ["code"]
-          },
           {
             foreignKeyName: "external_score_entries_source_id_fkey"
             columns: ["source_id"]
@@ -893,6 +872,65 @@ export type Database = {
           },
         ]
       }
+      round_entries: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          custom_name: string | null
+          description: string | null
+          display_order: number
+          entry_code: string | null
+          entry_key: string
+          entry_type: string
+          id: string
+          image_url: string | null
+          round_id: string
+          short_name: string | null
+          subtitle: string | null
+          updated_at: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          custom_name?: string | null
+          description?: string | null
+          display_order?: number
+          entry_code?: string | null
+          entry_key: string
+          entry_type?: string
+          id?: string
+          image_url?: string | null
+          round_id: string
+          short_name?: string | null
+          subtitle?: string | null
+          updated_at?: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          custom_name?: string | null
+          description?: string | null
+          display_order?: number
+          entry_code?: string | null
+          entry_key?: string
+          entry_type?: string
+          id?: string
+          image_url?: string | null
+          round_id?: string
+          short_name?: string | null
+          subtitle?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "round_entries_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       round_results: {
         Row: {
           calculated_at: string
@@ -968,13 +1006,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "round_results_country_code_fkey"
-            columns: ["country_code"]
-            isOneToOne: false
-            referencedRelation: "countries"
-            referencedColumns: ["code"]
-          },
-          {
             foreignKeyName: "round_results_round_id_fkey"
             columns: ["round_id"]
             isOneToOne: false
@@ -997,10 +1028,12 @@ export type Database = {
           id: string
           name: string
           opened_at: string | null
+          participant_mode: string
           public_advanced_transparency: boolean
           rank_exponent: number
           results_outdated: boolean
           results_status: string
+          self_voting_mode: string
           status: Database["public"]["Enums"]["round_status"]
           total_points_to_distribute: number
           updated_at: string
@@ -1018,10 +1051,12 @@ export type Database = {
           id?: string
           name: string
           opened_at?: string | null
+          participant_mode?: string
           public_advanced_transparency?: boolean
           rank_exponent?: number
           results_outdated?: boolean
           results_status?: string
+          self_voting_mode?: string
           status?: Database["public"]["Enums"]["round_status"]
           total_points_to_distribute?: number
           updated_at?: string
@@ -1039,10 +1074,12 @@ export type Database = {
           id?: string
           name?: string
           opened_at?: string | null
+          participant_mode?: string
           public_advanced_transparency?: boolean
           rank_exponent?: number
           results_outdated?: boolean
           results_status?: string
+          self_voting_mode?: string
           status?: Database["public"]["Enums"]["round_status"]
           total_points_to_distribute?: number
           updated_at?: string
@@ -1087,13 +1124,6 @@ export type Database = {
             referencedRelation: "televote_aggregations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "televote_aggregation_participants_country_code_fkey"
-            columns: ["country_code"]
-            isOneToOne: false
-            referencedRelation: "countries"
-            referencedColumns: ["code"]
-          },
         ]
       }
       televote_aggregation_sources: {
@@ -1110,6 +1140,7 @@ export type Database = {
           final_point_pool: number
           floored_point_pool: number
           id: string
+          input_mode: string
           percentage_weight: number
           pool_remainder: number
           pool_remainder_bonus: number
@@ -1133,6 +1164,7 @@ export type Database = {
           final_point_pool?: number
           floored_point_pool?: number
           id?: string
+          input_mode?: string
           percentage_weight?: number
           pool_remainder?: number
           pool_remainder_bonus?: number
@@ -1156,6 +1188,7 @@ export type Database = {
           final_point_pool?: number
           floored_point_pool?: number
           id?: string
+          input_mode?: string
           percentage_weight?: number
           pool_remainder?: number
           pool_remainder_bonus?: number
