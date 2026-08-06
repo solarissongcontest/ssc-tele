@@ -108,17 +108,18 @@ export async function loadRound(roundId: string): Promise<RoundConfig> {
   return data as unknown as RoundConfig;
 }
 
-/** Eligible participants = the round's configured country lineup. */
+/** Eligible participants = the round's configured line-up (stable entry keys). */
 export async function loadParticipants(roundId: string): Promise<string[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
-    .from("round_countries")
-    .select("country_code,display_order")
+    .from("round_entries" as any)
+    .select("entry_key,display_order")
     .eq("round_id", roundId)
     .order("display_order");
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r: any) => r.country_code as string);
+  return ((data ?? []) as any[]).map((r) => r.entry_key as string);
 }
+
 
 /** Original (untouched) vote totals per eligible participant. */
 export async function loadOriginalTotals(
