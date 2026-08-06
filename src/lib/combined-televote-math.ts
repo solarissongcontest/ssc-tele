@@ -503,7 +503,7 @@ export function allocateComponentPools(
     sourceId: r.item.id,
     sourceName: r.item.name,
     sourceType: r.item.type,
-    method: methodForSourceType(r.item.type),
+    method: methodForInputMode(resolveInputMode(r.item)),
     displayOrder: r.item.displayOrder,
     percentageWeight: Number(r.item.percentageWeight || 0),
     exactPool: r.exact,
