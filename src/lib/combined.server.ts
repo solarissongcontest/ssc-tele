@@ -4,9 +4,12 @@ import {
   computeCombined,
   methodForSourceType,
   COMBINED_ENGINE_VERSION,
+  resolveInputMode,
   type ComponentSourceInput,
   type CorrectionScope,
+  type SourceInputMode,
 } from "@/lib/combined-televote-math";
+
 
 export { requireAdmin, audit };
 
