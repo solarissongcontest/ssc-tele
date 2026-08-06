@@ -13,11 +13,61 @@
 
 import { DEFAULT_RANK_EXPONENT } from "@/lib/televote-math";
 
-export const COMBINED_ENGINE_VERSION = "component-pool-v1";
+export const COMBINED_ENGINE_VERSION = "component-pool-v2";
 export const WEIGHT_TOLERANCE = 1e-6;
 
-export type CalculationMethod = "rank_weighted" | "proportional" | "adjustment";
+export type CalculationMethod =
+  | "rank_weighted"
+  | "rescaled"
+  | "proportional"
+  | "adjustment";
 export type CorrectionScope = "source" | "final";
+
+/**
+ * Explicit source input mode. This — not the free-form source type — decides
+ * how a component is calculated.
+ *   raw_results      → rank-weighted conversion inside the component pool
+ *   converted_points → proportional rescaling (already-converted points)
+ *   activity_points  → proportional allocation
+ *   correction       → manual adjustment, never allocated a pool
+ */
+export type SourceInputMode =
+  | "raw_results"
+  | "converted_points"
+  | "activity_points"
+  | "correction";
+
+export const SOURCE_INPUT_MODES: {
+  value: SourceInputMode;
+  label: string;
+  method: CalculationMethod;
+  hint: string;
+}[] = [
+  {
+    value: "raw_results",
+    label: "Raw results",
+    method: "rank_weighted",
+    hint: "Raw vote totals — converted with rank weighting inside this component's pool.",
+  },
+  {
+    value: "converted_points",
+    label: "Converted points",
+    method: "rescaled",
+    hint: "Already-converted televote points — rescaled proportionally into this component's pool. No second conversion.",
+  },
+  {
+    value: "activity_points",
+    label: "Activity points",
+    method: "proportional",
+    hint: "Activity / engagement values — allocated proportionally inside this component's pool.",
+  },
+  {
+    value: "correction",
+    label: "Manual correction",
+    method: "adjustment",
+    hint: "Manual adjustment applied to a source or to the final score. Never receives a pool.",
+  },
+];
 
 /** Source types that are calculated as ordinary rank-weighted voting sources. */
 export const VOTING_SOURCE_TYPES = [
@@ -28,27 +78,66 @@ export const VOTING_SOURCE_TYPES = [
   "other",
 ];
 
+/** Legacy fallback for rows created before `input_mode` existed. */
+export function inputModeForSourceType(type: string): SourceInputMode {
+  if (type === "activity") return "activity_points";
+  if (type === "correction") return "correction";
+  return "raw_results";
+}
+
+export function methodForInputMode(mode: SourceInputMode): CalculationMethod {
+  return (
+    SOURCE_INPUT_MODES.find((m) => m.value === mode)?.method ?? "rank_weighted"
+  );
+}
+
+export function labelForInputMode(mode: SourceInputMode): string {
+  return SOURCE_INPUT_MODES.find((m) => m.value === mode)?.label ?? mode;
+}
+
+export function methodLabel(method: CalculationMethod): string {
+  switch (method) {
+    case "rank_weighted":
+      return "Rank-weighted conversion";
+    case "rescaled":
+      return "Proportional rescaling";
+    case "proportional":
+      return "Proportional allocation";
+    default:
+      return "Manual adjustment";
+  }
+}
+
+/** @deprecated use {@link methodForInputMode}. Kept for legacy call sites. */
 export function methodForSourceType(type: string): CalculationMethod {
-  if (type === "activity") return "proportional";
-  if (type === "correction") return "adjustment";
-  return "rank_weighted";
+  return methodForInputMode(inputModeForSourceType(type));
 }
 
 export type ComponentSourceInput = {
   id: string;
   name: string;
   type: string;
+  /** Explicit input mode; falls back to the source type when omitted. */
+  inputMode?: SourceInputMode | null;
   percentageWeight: number;
   enabled: boolean;
   displayOrder: number;
-  /** country code → raw value in this source */
+  /** entry key → raw value in this source */
   values: Record<string, number>;
-  /** country code → individual submitted scores, sorted later. Optional. */
+  /** entry key → individual submitted scores, sorted later. Optional. */
   distributions?: Record<string, number[]>;
   /** correction sources only */
   correctionTargetSourceId?: string | null;
   correctionScope?: CorrectionScope;
 };
+
+export function resolveInputMode(s: {
+  inputMode?: SourceInputMode | null;
+  type: string;
+}): SourceInputMode {
+  return s.inputMode ?? inputModeForSourceType(s.type);
+}
+
 
 export type ComponentPool = {
   sourceId: string;
