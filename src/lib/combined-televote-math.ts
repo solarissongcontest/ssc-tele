@@ -580,7 +580,7 @@ export function computeCombined(opts: {
     0,
   );
   if (components.length === 0) errors.push("Enable at least one component source.");
-  if (participants.length === 0) errors.push("Select at least one eligible country.");
+  if (participants.length === 0) errors.push("Select at least one eligible entry.");
   if (
     components.length > 0 &&
     Math.abs(totalPercentage - 100) > WEIGHT_TOLERANCE * 100
