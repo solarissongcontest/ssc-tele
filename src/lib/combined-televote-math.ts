@@ -535,10 +535,11 @@ export function computeCombined(opts: {
   const eligible = new Set(participants);
 
   const enabled = opts.sources.filter((s) => s.enabled);
-  const corrections = enabled.filter((s) => s.type === "correction");
+  const corrections = enabled.filter((s) => resolveInputMode(s) === "correction");
   const components = enabled
-    .filter((s) => s.type !== "correction")
+    .filter((s) => resolveInputMode(s) !== "correction")
     .sort((a, b) => a.displayOrder - b.displayOrder || a.id.localeCompare(b.id));
+
 
   // Ineligible values → warning + exclusion.
   for (const s of enabled) {
