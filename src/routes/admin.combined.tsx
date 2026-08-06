@@ -858,7 +858,9 @@ function AddSourceForm({
   const [roundId, setRoundId] = useState<string>("");
   const [name, setName] = useState("");
   const [stage, setStage] = useState("pre_conversion");
-  const [weight, setWeight] = useState("1");
+  const [mode, setMode] = useState("raw_results");
+  const [weight, setWeight] = useState("0");
+
 
   return (
     <div className="rounded-2xl border border-dashed border-white/15 p-3 grid gap-2 sm:grid-cols-5 items-end">
