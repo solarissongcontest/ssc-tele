@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { SOURCE_INPUT_MODES } from "@/lib/combined-televote-math";
+
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -858,7 +860,9 @@ function AddSourceForm({
   const [roundId, setRoundId] = useState<string>("");
   const [name, setName] = useState("");
   const [stage, setStage] = useState("pre_conversion");
-  const [weight, setWeight] = useState("1");
+  const [mode, setMode] = useState("raw_results");
+  const [weight, setWeight] = useState("0");
+
 
   return (
     <div className="rounded-2xl border border-dashed border-white/15 p-3 grid gap-2 sm:grid-cols-5 items-end">
@@ -915,20 +919,27 @@ function AddSourceForm({
         </div>
       )}
       <div className="space-y-1">
-        <Label className="text-xs">Stage</Label>
-        <Select value={stage} onValueChange={setStage}>
+        <Label className="text-xs">Input mode</Label>
+        <Select value={mode} onValueChange={setMode}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="pre_conversion">Before conversion</SelectItem>
-            <SelectItem value="post_conversion">After conversion</SelectItem>
+            {SOURCE_INPUT_MODES.map((m) => (
+              <SelectItem key={m.value} value={m.value}>
+                {m.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">Weight</Label>
-        <Input value={weight} onChange={(e) => setWeight(e.target.value)} />
+        <Label className="text-xs">Weight %</Label>
+        <Input
+          inputMode="numeric"
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+        />
       </div>
       <Button
         onClick={() => {
@@ -943,15 +954,17 @@ function AddSourceForm({
           }
           onAdd({
             sourceType: type,
+            inputMode: mode,
             sourceRoundId: type === "round" ? roundId : null,
             sourceName: finalName,
             stage,
-            weight: Number(weight) || 1,
+            percentageWeight: Number(weight) || 0,
           });
           setName("");
           setRoundId("");
         }}
       >
+
         <Plus className="h-4 w-4" /> Add source
       </Button>
     </div>

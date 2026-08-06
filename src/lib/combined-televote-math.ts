@@ -13,11 +13,61 @@
 
 import { DEFAULT_RANK_EXPONENT } from "@/lib/televote-math";
 
-export const COMBINED_ENGINE_VERSION = "component-pool-v1";
+export const COMBINED_ENGINE_VERSION = "component-pool-v2";
 export const WEIGHT_TOLERANCE = 1e-6;
 
-export type CalculationMethod = "rank_weighted" | "proportional" | "adjustment";
+export type CalculationMethod =
+  | "rank_weighted"
+  | "rescaled"
+  | "proportional"
+  | "adjustment";
 export type CorrectionScope = "source" | "final";
+
+/**
+ * Explicit source input mode. This — not the free-form source type — decides
+ * how a component is calculated.
+ *   raw_results      → rank-weighted conversion inside the component pool
+ *   converted_points → proportional rescaling (already-converted points)
+ *   activity_points  → proportional allocation
+ *   correction       → manual adjustment, never allocated a pool
+ */
+export type SourceInputMode =
+  | "raw_results"
+  | "converted_points"
+  | "activity_points"
+  | "correction";
+
+export const SOURCE_INPUT_MODES: {
+  value: SourceInputMode;
+  label: string;
+  method: CalculationMethod;
+  hint: string;
+}[] = [
+  {
+    value: "raw_results",
+    label: "Raw results",
+    method: "rank_weighted",
+    hint: "Raw vote totals — converted with rank weighting inside this component's pool.",
+  },
+  {
+    value: "converted_points",
+    label: "Converted points",
+    method: "rescaled",
+    hint: "Already-converted televote points — rescaled proportionally into this component's pool. No second conversion.",
+  },
+  {
+    value: "activity_points",
+    label: "Activity points",
+    method: "proportional",
+    hint: "Activity / engagement values — allocated proportionally inside this component's pool.",
+  },
+  {
+    value: "correction",
+    label: "Manual correction",
+    method: "adjustment",
+    hint: "Manual adjustment applied to a source or to the final score. Never receives a pool.",
+  },
+];
 
 /** Source types that are calculated as ordinary rank-weighted voting sources. */
 export const VOTING_SOURCE_TYPES = [
@@ -28,27 +78,66 @@ export const VOTING_SOURCE_TYPES = [
   "other",
 ];
 
+/** Legacy fallback for rows created before `input_mode` existed. */
+export function inputModeForSourceType(type: string): SourceInputMode {
+  if (type === "activity") return "activity_points";
+  if (type === "correction") return "correction";
+  return "raw_results";
+}
+
+export function methodForInputMode(mode: SourceInputMode): CalculationMethod {
+  return (
+    SOURCE_INPUT_MODES.find((m) => m.value === mode)?.method ?? "rank_weighted"
+  );
+}
+
+export function labelForInputMode(mode: SourceInputMode): string {
+  return SOURCE_INPUT_MODES.find((m) => m.value === mode)?.label ?? mode;
+}
+
+export function methodLabel(method: CalculationMethod): string {
+  switch (method) {
+    case "rank_weighted":
+      return "Rank-weighted conversion";
+    case "rescaled":
+      return "Proportional rescaling";
+    case "proportional":
+      return "Proportional allocation";
+    default:
+      return "Manual adjustment";
+  }
+}
+
+/** @deprecated use {@link methodForInputMode}. Kept for legacy call sites. */
 export function methodForSourceType(type: string): CalculationMethod {
-  if (type === "activity") return "proportional";
-  if (type === "correction") return "adjustment";
-  return "rank_weighted";
+  return methodForInputMode(inputModeForSourceType(type));
 }
 
 export type ComponentSourceInput = {
   id: string;
   name: string;
   type: string;
+  /** Explicit input mode; falls back to the source type when omitted. */
+  inputMode?: SourceInputMode | null;
   percentageWeight: number;
   enabled: boolean;
   displayOrder: number;
-  /** country code → raw value in this source */
+  /** entry key → raw value in this source */
   values: Record<string, number>;
-  /** country code → individual submitted scores, sorted later. Optional. */
+  /** entry key → individual submitted scores, sorted later. Optional. */
   distributions?: Record<string, number[]>;
   /** correction sources only */
   correctionTargetSourceId?: string | null;
   correctionScope?: CorrectionScope;
 };
+
+export function resolveInputMode(s: {
+  inputMode?: SourceInputMode | null;
+  type: string;
+}): SourceInputMode {
+  return s.inputMode ?? inputModeForSourceType(s.type);
+}
+
 
 export type ComponentPool = {
   sourceId: string;
@@ -323,7 +412,9 @@ export function allocateRankWeightedSource(
 }
 
 /* ------------------------------------------------------------------ */
-/* Proportional allocation for an activity source                      */
+/* Proportional allocation                                             */
+/*   - activity_points  → proportional allocation                      */
+/*   - converted_points → proportional rescaling (no re-conversion)    */
 /* ------------------------------------------------------------------ */
 
 export function allocateProportionalSource(input: {
@@ -332,10 +423,26 @@ export function allocateProportionalSource(input: {
   runningOrder: Record<string, number>;
   values: Record<string, number>;
   pool: number;
+  /** "proportional" (activity) or "rescaled" (already-converted points) */
+  method?: Extract<CalculationMethod, "proportional" | "rescaled">;
+  distributions?: Record<string, number[]>;
 }): { rows: ComponentCountryResult[]; rawTotal: number } {
   const { participants, values, pool, source } = input;
+  const method = input.method ?? "proportional";
   const raw = (c: string) => Math.max(0, Number(values[c] ?? 0));
   const rawTotal = participants.reduce((a, c) => a + raw(c), 0);
+
+  // Converted-point sources keep a visible rank so organizers can audit the
+  // rescaling; no rank weighting is ever applied to them.
+  const ordered = [...participants].sort(
+    (a, b) =>
+      raw(b) - raw(a) ||
+      compareDistributions(input.distributions?.[a], input.distributions?.[b]) ||
+      (input.runningOrder[a] ?? 0) - (input.runningOrder[b] ?? 0) ||
+      a.localeCompare(b),
+  );
+  const rankOf = new Map<string, number>();
+  ordered.forEach((c, i) => rankOf.set(c, i + 1));
 
   const allocation = largestRemainder(
     participants,
@@ -352,9 +459,9 @@ export function allocateProportionalSource(input: {
     sourceName: source.name,
     sourceType: source.type,
     countryCode: row.item,
-    method: "proportional" as const,
+    method,
     rawScore: raw(row.item),
-    rawRank: null,
+    rawRank: method === "rescaled" ? (rankOf.get(row.item) ?? null) : null,
     participantCount: participants.length,
     rankBase: null,
     rankExponent: null,
@@ -372,6 +479,7 @@ export function allocateProportionalSource(input: {
 
   return { rows, rawTotal };
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Component pools                                                     */
@@ -395,7 +503,7 @@ export function allocateComponentPools(
     sourceId: r.item.id,
     sourceName: r.item.name,
     sourceType: r.item.type,
-    method: methodForSourceType(r.item.type),
+    method: methodForInputMode(resolveInputMode(r.item)),
     displayOrder: r.item.displayOrder,
     percentageWeight: Number(r.item.percentageWeight || 0),
     exactPool: r.exact,
@@ -427,10 +535,11 @@ export function computeCombined(opts: {
   const eligible = new Set(participants);
 
   const enabled = opts.sources.filter((s) => s.enabled);
-  const corrections = enabled.filter((s) => s.type === "correction");
+  const corrections = enabled.filter((s) => resolveInputMode(s) === "correction");
   const components = enabled
-    .filter((s) => s.type !== "correction")
+    .filter((s) => resolveInputMode(s) !== "correction")
     .sort((a, b) => a.displayOrder - b.displayOrder || a.id.localeCompare(b.id));
+
 
   // Ineligible values → warning + exclusion.
   for (const s of enabled) {
@@ -471,7 +580,7 @@ export function computeCombined(opts: {
     0,
   );
   if (components.length === 0) errors.push("Enable at least one component source.");
-  if (participants.length === 0) errors.push("Select at least one eligible country.");
+  if (participants.length === 0) errors.push("Select at least one eligible entry.");
   if (
     components.length > 0 &&
     Math.abs(totalPercentage - 100) > WEIGHT_TOLERANCE * 100
@@ -487,19 +596,28 @@ export function computeCombined(opts: {
   for (const s of components) {
     const pool = poolById.get(s.id)!;
     const values = adjustedValues.get(s.id)!;
-    const method = methodForSourceType(s.type);
+    const method = methodForInputMode(resolveInputMode(s));
 
-    if (method === "proportional") {
+    if (method === "proportional" || method === "rescaled") {
       const { rows, rawTotal } = allocateProportionalSource({
         source: { id: s.id, name: s.name, type: s.type },
         participants,
         runningOrder,
         values,
         pool: pool.finalPool,
+        method,
+        distributions: s.distributions,
       });
       if (rawTotal <= 0 && pool.finalPool > 0)
         errors.push(
-          `“${s.name}” has no activity values — add data, disable the source or set its weight to 0%.`,
+          method === "rescaled"
+            ? `“${s.name}” has no converted points — add data, disable the source or set its weight to 0%.`
+            : `“${s.name}” has no activity values — add data, disable the source or set its weight to 0%.`,
+        );
+      const missingP = participants.filter((c) => values[c] === undefined);
+      if (missingP.length)
+        warnings.push(
+          `${missingP.length} eligible ${missingP.length === 1 ? "entry is" : "entries are"} missing from “${s.name}” and counted as zero.`,
         );
       componentRows.push(...rows);
     } else {
@@ -523,10 +641,11 @@ export function computeCombined(opts: {
       const missing = participants.filter((c) => values[c] === undefined);
       if (missing.length)
         warnings.push(
-          `${missing.length} eligible ${missing.length === 1 ? "country is" : "countries are"} missing from “${s.name}” and counted as zero.`,
+          `${missing.length} eligible ${missing.length === 1 ? "entry is" : "entries are"} missing from “${s.name}” and counted as zero.`,
         );
       componentRows.push(...rows);
     }
+
 
     // Component allocation integrity
     const sum = componentRows
@@ -543,7 +662,7 @@ export function computeCombined(opts: {
   for (const r of componentRows) byCountry.get(r.countryCode)?.push(r);
 
   const votingPoolOrder = pools
-    .filter((p) => p.method === "rank_weighted")
+    .filter((p) => p.method === "rank_weighted" || p.method === "rescaled")
     .sort(
       (a, b) =>
         b.percentageWeight - a.percentageWeight ||
@@ -554,11 +673,12 @@ export function computeCombined(opts: {
   const rows: CombinedCountryResult[] = participants.map((code) => {
     const comps = byCountry.get(code)!;
     const totalVotingPoints = comps
-      .filter((c) => c.method === "rank_weighted")
+      .filter((c) => c.method === "rank_weighted" || c.method === "rescaled")
       .reduce((a, c) => a + c.finalAllocatedPoints, 0);
     const totalActivityPoints = comps
       .filter((c) => c.method === "proportional")
       .reduce((a, c) => a + c.finalAllocatedPoints, 0);
+
     const correction = Number(finalCorrections[code] ?? 0);
     return {
       code,

@@ -254,6 +254,7 @@ export const upsertSource = createServerFn({ method: "POST" })
       id?: string;
       aggregationId: string;
       sourceType?: string;
+      inputMode?: string;
       sourceRoundId?: string | null;
       sourceName?: string;
       stage?: "pre_conversion" | "post_conversion";
@@ -267,6 +268,13 @@ export const upsertSource = createServerFn({ method: "POST" })
       if (!data?.aggregationId) throw new Error("Missing aggregation");
       if (data.sourceType && !SOURCE_TYPES.includes(data.sourceType))
         throw new Error("Invalid source type");
+      if (
+        data.inputMode &&
+        !["raw_results", "converted_points", "activity_points", "correction"].includes(
+          data.inputMode,
+        )
+      )
+        throw new Error("Invalid input mode");
       if (data.stage && !["pre_conversion", "post_conversion"].includes(data.stage))
         throw new Error("Invalid calculation stage");
       if (data.weight !== undefined && !Number.isFinite(Number(data.weight)))
@@ -287,16 +295,24 @@ export const upsertSource = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const actor = await requireAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { inputModeForSourceType, methodForInputMode } = await import(
+      "@/lib/combined-televote-math"
+    );
     const patch: Record<string, unknown> = { aggregation_id: data.aggregationId };
-    if (data.sourceType !== undefined) {
-      patch.source_type = data.sourceType;
-      patch.calculation_method =
-        data.sourceType === "activity"
-          ? "proportional"
-          : data.sourceType === "correction"
-            ? "adjustment"
-            : "rank_weighted";
+    if (data.sourceType !== undefined) patch.source_type = data.sourceType;
+
+    // The calculation method is derived from the explicit input mode and is
+    // never editable on its own.
+    const mode =
+      (data.inputMode as any) ??
+      (data.sourceType !== undefined
+        ? inputModeForSourceType(data.sourceType)
+        : undefined);
+    if (mode) {
+      patch.input_mode = mode;
+      patch.calculation_method = methodForInputMode(mode);
     }
+
     if (data.sourceRoundId !== undefined) patch.source_round_id = data.sourceRoundId;
     if (data.sourceName !== undefined) patch.source_name = data.sourceName.trim();
     if (data.stage !== undefined) patch.calculation_stage = data.stage;
