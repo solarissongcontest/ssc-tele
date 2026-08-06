@@ -55,6 +55,7 @@ export type SourceRow = {
   id: string;
   aggregation_id: string;
   source_type: string;
+  input_mode: SourceInputMode | null;
   source_round_id: string | null;
   source_name: string;
   calculation_stage: "pre_conversion" | "post_conversion";
@@ -71,6 +72,7 @@ export type SourceRow = {
   pool_remainder_bonus: number | null;
   final_point_pool: number | null;
 };
+
 
 export async function loadSources(aggregationId: string): Promise<SourceRow[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
