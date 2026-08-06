@@ -661,7 +661,7 @@ export function computeCombined(opts: {
   for (const r of componentRows) byCountry.get(r.countryCode)?.push(r);
 
   const votingPoolOrder = pools
-    .filter((p) => p.method === "rank_weighted")
+    .filter((p) => p.method === "rank_weighted" || p.method === "rescaled")
     .sort(
       (a, b) =>
         b.percentageWeight - a.percentageWeight ||
@@ -672,11 +672,12 @@ export function computeCombined(opts: {
   const rows: CombinedCountryResult[] = participants.map((code) => {
     const comps = byCountry.get(code)!;
     const totalVotingPoints = comps
-      .filter((c) => c.method === "rank_weighted")
+      .filter((c) => c.method === "rank_weighted" || c.method === "rescaled")
       .reduce((a, c) => a + c.finalAllocatedPoints, 0);
     const totalActivityPoints = comps
       .filter((c) => c.method === "proportional")
       .reduce((a, c) => a + c.finalAllocatedPoints, 0);
+
     const correction = Number(finalCorrections[code] ?? 0);
     return {
       code,
