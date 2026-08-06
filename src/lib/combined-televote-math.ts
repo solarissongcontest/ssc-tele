@@ -595,19 +595,28 @@ export function computeCombined(opts: {
   for (const s of components) {
     const pool = poolById.get(s.id)!;
     const values = adjustedValues.get(s.id)!;
-    const method = methodForSourceType(s.type);
+    const method = methodForInputMode(resolveInputMode(s));
 
-    if (method === "proportional") {
+    if (method === "proportional" || method === "rescaled") {
       const { rows, rawTotal } = allocateProportionalSource({
         source: { id: s.id, name: s.name, type: s.type },
         participants,
         runningOrder,
         values,
         pool: pool.finalPool,
+        method,
+        distributions: s.distributions,
       });
       if (rawTotal <= 0 && pool.finalPool > 0)
         errors.push(
-          `“${s.name}” has no activity values — add data, disable the source or set its weight to 0%.`,
+          method === "rescaled"
+            ? `“${s.name}” has no converted points — add data, disable the source or set its weight to 0%.`
+            : `“${s.name}” has no activity values — add data, disable the source or set its weight to 0%.`,
+        );
+      const missingP = participants.filter((c) => values[c] === undefined);
+      if (missingP.length)
+        warnings.push(
+          `${missingP.length} eligible ${missingP.length === 1 ? "entry is" : "entries are"} missing from “${s.name}” and counted as zero.`,
         );
       componentRows.push(...rows);
     } else {
@@ -631,10 +640,11 @@ export function computeCombined(opts: {
       const missing = participants.filter((c) => values[c] === undefined);
       if (missing.length)
         warnings.push(
-          `${missing.length} eligible ${missing.length === 1 ? "country is" : "countries are"} missing from “${s.name}” and counted as zero.`,
+          `${missing.length} eligible ${missing.length === 1 ? "entry is" : "entries are"} missing from “${s.name}” and counted as zero.`,
         );
       componentRows.push(...rows);
     }
+
 
     // Component allocation integrity
     const sum = componentRows
