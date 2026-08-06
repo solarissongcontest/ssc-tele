@@ -412,7 +412,9 @@ export function allocateRankWeightedSource(
 }
 
 /* ------------------------------------------------------------------ */
-/* Proportional allocation for an activity source                      */
+/* Proportional allocation                                             */
+/*   - activity_points  → proportional allocation                      */
+/*   - converted_points → proportional rescaling (no re-conversion)    */
 /* ------------------------------------------------------------------ */
 
 export function allocateProportionalSource(input: {
@@ -421,10 +423,26 @@ export function allocateProportionalSource(input: {
   runningOrder: Record<string, number>;
   values: Record<string, number>;
   pool: number;
+  /** "proportional" (activity) or "rescaled" (already-converted points) */
+  method?: Extract<CalculationMethod, "proportional" | "rescaled">;
+  distributions?: Record<string, number[]>;
 }): { rows: ComponentCountryResult[]; rawTotal: number } {
   const { participants, values, pool, source } = input;
+  const method = input.method ?? "proportional";
   const raw = (c: string) => Math.max(0, Number(values[c] ?? 0));
   const rawTotal = participants.reduce((a, c) => a + raw(c), 0);
+
+  // Converted-point sources keep a visible rank so organizers can audit the
+  // rescaling; no rank weighting is ever applied to them.
+  const ordered = [...participants].sort(
+    (a, b) =>
+      raw(b) - raw(a) ||
+      compareDistributions(input.distributions?.[a], input.distributions?.[b]) ||
+      (input.runningOrder[a] ?? 0) - (input.runningOrder[b] ?? 0) ||
+      a.localeCompare(b),
+  );
+  const rankOf = new Map<string, number>();
+  ordered.forEach((c, i) => rankOf.set(c, i + 1));
 
   const allocation = largestRemainder(
     participants,
@@ -441,9 +459,9 @@ export function allocateProportionalSource(input: {
     sourceName: source.name,
     sourceType: source.type,
     countryCode: row.item,
-    method: "proportional" as const,
+    method,
     rawScore: raw(row.item),
-    rawRank: null,
+    rawRank: method === "rescaled" ? (rankOf.get(row.item) ?? null) : null,
     participantCount: participants.length,
     rankBase: null,
     rankExponent: null,
@@ -461,6 +479,7 @@ export function allocateProportionalSource(input: {
 
   return { rows, rawTotal };
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Component pools                                                     */
