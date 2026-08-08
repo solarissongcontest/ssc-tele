@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ReactNode,
 } from "react";
 import {
   useMutation,
@@ -12,10 +13,8 @@ import {
 import { useServerFn } from "@tanstack/react-start";
 import {
   AlertTriangle,
-  ChevronDown,
+  CheckCircle2,
   Download,
-  Layers,
-  Loader2,
   Lock,
   Plus,
   Radio,
@@ -27,40 +26,18 @@ import { toast } from "sonner";
 
 import { AdminShell } from "@/components/admin-shell";
 import { EntryAvatar } from "@/components/entry-avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { useAllRounds } from "@/hooks/use-round-results";
 import {
-  getEntryCode,
-  getEntryDisplayName,
-  entryMap,
-  entryNoun,
-  type ResolvedEntry,
-} from "@/lib/round-entries";
-import {
   SOURCE_INPUT_MODES,
+  labelForInputMode,
 } from "@/lib/combined-televote-math";
+import {
+  saveExternalSourceValues,
+  syncParticipantsFromLinkedRounds,
+} from "@/lib/combined-bulk.functions";
 import {
   createAggregation,
   deleteAggregation,
@@ -71,13 +48,18 @@ import {
   setAggregationParticipants,
   setAggregationStatus,
   updateAggregation,
-  upsertExternalEntry,
   upsertSource,
 } from "@/lib/combined.functions";
 import {
   downloadCSV,
   downloadJSON,
 } from "@/lib/export";
+import {
+  entryMap,
+  entryNoun,
+  getEntryDisplayName,
+  type ResolvedEntry,
+} from "@/lib/round-entries";
 
 export const Route = createFileRoute("/admin/combined")({
   head: () => ({
@@ -85,167 +67,104 @@ export const Route = createFileRoute("/admin/combined")({
       {
         title: "Combined Televote — Solaris Admin",
       },
-      {
-        name: "description",
-        content:
-          "Combine multiple Solaris voting rounds, imported results and activity points into one final televote result.",
-      },
     ],
   }),
   component: CombinedPage,
 });
 
-const SOURCE_TYPES = [
+type SourceKind =
+  | "round"
+  | "instagram"
+  | "external_televote"
+  | "imported"
+  | "activity"
+  | "correction"
+  | "other";
+
+const SOURCE_TYPES: {
+  value: SourceKind;
+  label: string;
+  hint: string;
+}[] = [
   {
     value: "round",
     label: "Website voting round",
+    hint: "Reads the selected website round automatically.",
   },
   {
     value: "instagram",
     label: "Instagram Stories",
+    hint: "Enter all Instagram values in one bulk table.",
   },
   {
     value: "external_televote",
     label: "External televote",
+    hint: "Enter the same contest entries in one bulk table.",
   },
   {
     value: "imported",
     label: "Imported results",
+    hint: "Manual imported values or already-converted points.",
   },
   {
     value: "activity",
     label: "Activity points",
+    hint: "Proportional activity or engagement values.",
   },
   {
     value: "correction",
-    label: "Correction / adjustment",
+    label: "Correction",
+    hint: "Manual positive or negative adjustments.",
   },
   {
     value: "other",
     label: "Other",
+    hint: "Another manual result source.",
   },
 ];
 
-const num = (
-  value: number,
-  digits = 3,
-) =>
-  Number.isFinite(Number(value))
-    ? Number(value).toLocaleString(
-        undefined,
-        {
-          maximumFractionDigits:
-            digits,
-        },
-      )
+function num(value: number, digits = 2) {
+  return Number.isFinite(Number(value))
+    ? Number(value).toLocaleString(undefined, {
+        maximumFractionDigits: digits,
+      })
     : "—";
+}
 
 function CombinedPage() {
   const qc = useQueryClient();
+  const { data: rounds = [] } = useAllRounds();
 
-  const { data: rounds } =
-    useAllRounds();
-
-  const [
-    selectedId,
-    setSelectedId,
-  ] = useState<string | null>(
-    null,
+  const listFn = useServerFn(listAggregations);
+  const detailFn = useServerFn(getAggregation);
+  const createFn = useServerFn(createAggregation);
+  const updateFn = useServerFn(updateAggregation);
+  const participantsFn = useServerFn(setAggregationParticipants);
+  const sourceFn = useServerFn(upsertSource);
+  const syncParticipantsFn = useServerFn(
+    syncParticipantsFromLinkedRounds,
   );
+  const deleteSourceFn = useServerFn(deleteSource);
+  const recalcFn = useServerFn(recalculateCombined);
+  const statusFn = useServerFn(setAggregationStatus);
+  const deleteAggFn = useServerFn(deleteAggregation);
 
-  const [
-    newName,
-    setNewName,
-  ] = useState("");
-
-  const [
-    expanded,
-    setExpanded,
-  ] = useState<string | null>(
-    null,
-  );
-
-  const [
-    entryDialog,
-    setEntryDialog,
-  ] = useState<{
-    sourceId: string;
-  } | null>(null);
-
-  const listFn =
-    useServerFn(
-      listAggregations,
-    );
-
-  const createFn =
-    useServerFn(
-      createAggregation,
-    );
-
-  const removeFn =
-    useServerFn(
-      deleteAggregation,
-    );
-
-  const detailFn =
-    useServerFn(
-      getAggregation,
-    );
-
-  const updateFn =
-    useServerFn(
-      updateAggregation,
-    );
-
-  const participantsFn =
-    useServerFn(
-      setAggregationParticipants,
-    );
-
-  const sourceFn =
-    useServerFn(
-      upsertSource,
-    );
-
-  const deleteSourceFn =
-    useServerFn(
-      deleteSource,
-    );
-
-  const entryFn =
-    useServerFn(
-      upsertExternalEntry,
-    );
-
-  const recalcFn =
-    useServerFn(
-      recalculateCombined,
-    );
-
-  const statusFn =
-    useServerFn(
-      setAggregationStatus,
-    );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+  const [tab, setTab] = useState<
+    "setup" | "sources" | "results" | "public"
+  >("setup");
 
   const list = useQuery({
-    queryKey: [
-      "combined-aggregations",
-    ],
-    queryFn: async () =>
-      (await listFn()) as any[],
-    refetchInterval: 15_000,
+    queryKey: ["combined-aggregations-redesign"],
+    queryFn: async () => (await listFn()) as any[],
   });
 
   const activeId =
-    selectedId ??
-    list.data?.[0]?.id ??
-    null;
+    selectedId ?? list.data?.[0]?.id ?? null;
 
   const detail = useQuery({
-    queryKey: [
-      "combined-aggregation",
-      activeId,
-    ],
+    queryKey: ["combined-aggregation-redesign", activeId],
     queryFn: async () =>
       activeId
         ? await detailFn({
@@ -254,2542 +173,1857 @@ function CombinedPage() {
             },
           })
         : null,
-    enabled:
-      Boolean(activeId),
-    refetchInterval: 10_000,
+    enabled: Boolean(activeId),
   });
 
-  const agg =
-    detail.data?.agg ?? null;
-
-  const preview =
-    detail.data?.preview ??
-    null;
-
-  const sources =
-    detail.data?.sources ?? [];
-
-  const participants =
-    detail.data?.participants ??
-    [];
-
-  const externalEntries =
-    detail.data?.entries ?? [];
-
-  const log =
-    detail.data?.log ?? [];
-
+  const data = detail.data as any;
+  const agg = data?.agg ?? null;
+  const sources = data?.sources ?? [];
+  const preview = data?.preview ?? null;
+  const participants: string[] = data?.participants ?? [];
+  const externalEntries = data?.entries ?? [];
   const entryCatalog =
-    (detail.data?.entryCatalog ??
-      []) as ResolvedEntry[];
+    (data?.entryCatalog ?? []) as ResolvedEntry[];
 
-  const byEntryKey =
-    useMemo(
-      () =>
-        entryMap(
-          entryCatalog,
-        ),
-      [entryCatalog],
-    );
+  const byEntryKey = useMemo(
+    () => entryMap(entryCatalog),
+    [entryCatalog],
+  );
 
-  const participantPlural =
-    entryNoun(
-      entryCatalog,
-      true,
-    );
-
-  const [
-    tInput,
-    setTInput,
-  ] = useState("");
-
-  const [
-    eInput,
-    setEInput,
-  ] = useState("");
-
-  const [
-    nameInput,
-    setNameInput,
-  ] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [tInput, setTInput] = useState("");
+  const [eInput, setEInput] = useState("");
 
   useEffect(() => {
     if (!agg) return;
-
-    setTInput(
-      String(
-        agg.total_points_to_distribute,
-      ),
-    );
-
-    setEInput(
-      String(
-        agg.rank_exponent,
-      ),
-    );
-
-    setNameInput(
-      agg.name,
-    );
+    setNameInput(String(agg.name ?? ""));
+    setTInput(String(agg.total_points_to_distribute ?? 0));
+    setEInput(String(agg.rank_exponent ?? 1.33));
   }, [
     agg?.id,
-    agg?.calculation_version,
+    agg?.name,
     agg?.total_points_to_distribute,
     agg?.rank_exponent,
-    agg?.name,
+    agg?.calculation_version,
   ]);
 
   const refresh = () => {
     void qc.invalidateQueries({
-      queryKey: [
-        "combined-aggregation",
-        activeId,
-      ],
+      queryKey: ["combined-aggregation-redesign", activeId],
     });
 
     void qc.invalidateQueries({
-      queryKey: [
-        "combined-aggregations",
-      ],
+      queryKey: ["combined-aggregations-redesign"],
     });
   };
 
-  const createMut =
-    useMutation({
-      mutationFn: async (
-        name: string,
-      ) =>
-        await createFn({
-          data: {
-            name,
-          },
-        }),
+  const createMut = useMutation({
+    mutationFn: async () =>
+      await createFn({
+        data: {
+          name: newName.trim(),
+        },
+      }),
 
-      onSuccess: (
-        result: any,
-      ) => {
-        toast.success(
-          "Combined result created",
-        );
+    onSuccess: (result: any) => {
+      setNewName("");
+      if (result?.id) {
+        setSelectedId(result.id);
+      }
+      refresh();
+      toast.success("Combined televote created");
+    },
 
-        if (result?.id) {
-          setSelectedId(
-            result.id,
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Could not create combined televote"),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: async (patch: any) =>
+      await updateFn({
+        data: {
+          id: activeId!,
+          ...patch,
+        },
+      }),
+
+    onSuccess: () => {
+      refresh();
+      toast.success("Saved");
+    },
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Could not save"),
+  });
+
+  const participantsMut = useMutation({
+    mutationFn: async (entryKeys: string[]) =>
+      await participantsFn({
+        data: {
+          id: activeId!,
+          entryKeys,
+        },
+      }),
+
+    onSuccess: () => {
+      refresh();
+      toast.success("Entries synced");
+    },
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Could not sync entries"),
+  });
+
+  const sourceMut = useMutation({
+    mutationFn: async (patch: any) =>
+      await sourceFn({
+        data: {
+          aggregationId: activeId!,
+          ...patch,
+        },
+      }),
+
+    onSuccess: async (_result, patch) => {
+      if (
+        patch?.sourceRoundId &&
+        !patch?.id
+      ) {
+        try {
+          const synced =
+            await syncParticipantsFn({
+              data: {
+                aggregationId:
+                  activeId!,
+              },
+            });
+
+          toast.success(
+            `Source saved · ${synced.count} entries synced automatically`,
+          );
+        } catch (error: any) {
+          toast.warning(
+            error?.message ??
+              "Source saved, but entries could not be synced automatically",
           );
         }
+      } else {
+        toast.success("Source saved");
+      }
 
-        refresh();
-      },
+      refresh();
+    },
 
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Something went wrong",
-        ),
-    });
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Could not save source"),
+  });
 
-  const updateMut =
-    useMutation({
-      mutationFn: async (
-        patch: any,
-      ) =>
-        await updateFn({
-          data: {
-            id: activeId!,
-            ...patch,
-          },
-        }),
+  const deleteSourceMut = useMutation({
+    mutationFn: async (id: string) =>
+      await deleteSourceFn({
+        data: { id },
+      }),
 
-      onSuccess: () => {
-        toast.success("Saved");
-        refresh();
-      },
+    onSuccess: () => {
+      refresh();
+      toast.success("Source removed");
+    },
 
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Something went wrong",
-        ),
-    });
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Could not remove source"),
+  });
 
-  const participantsMut =
-    useMutation({
-      mutationFn: async (
-        entryKeys: string[],
-      ) =>
-        await participantsFn({
-          data: {
-            id: activeId!,
-            entryKeys,
-          },
-        }),
+  const recalcMut = useMutation({
+    mutationFn: async () =>
+      await recalcFn({
+        data: {
+          id: activeId!,
+          confirm:
+            agg?.status === "locked" ||
+            agg?.status === "published",
+        },
+      }),
 
-      onSuccess: () => {
-        toast.success(
-          "Entries updated",
-        );
-        refresh();
-      },
+    onSuccess: (result: any) => {
+      refresh();
 
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Could not save entries",
-        ),
-    });
-
-  const sourceMut =
-    useMutation({
-      mutationFn: async (
-        patch: any,
-      ) =>
-        await sourceFn({
-          data: {
-            aggregationId:
-              activeId!,
-            ...patch,
-          },
-        }),
-
-      onSuccess: () => {
-        toast.success(
-          "Source saved",
-        );
-        refresh();
-      },
-
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Could not save source",
-        ),
-    });
-
-  const sourceDeleteMut =
-    useMutation({
-      mutationFn: async (
-        id: string,
-      ) =>
-        await deleteSourceFn({
-          data: { id },
-        }),
-
-      onSuccess: () => {
-        toast.success(
-          "Source removed",
-        );
-        refresh();
-      },
-
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Could not remove source",
-        ),
-    });
-
-  const entryMut =
-    useMutation({
-      mutationFn: async (
-        payload: any,
-      ) =>
-        await entryFn({
-          data: payload,
-        }),
-
-      onSuccess: () => {
-        toast.success(
-          "Value saved",
-        );
-        refresh();
-      },
-
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Could not save value",
-        ),
-    });
-
-  const recalcMut =
-    useMutation({
-      mutationFn: async (
-        confirm: boolean,
-      ) =>
-        await recalcFn({
-          data: {
-            id: activeId!,
-            confirm,
-          },
-        }),
-
-      onSuccess: (
-        result: any,
-      ) => {
-        toast.success(
-          `Recalculated · v${result.version} · ${result.allocatedTotal} component points allocated`,
-        );
-
-        (
-          result.warnings ?? []
-        ).forEach(
-          (warning: string) =>
-            toast.warning(
-              warning,
-            ),
-        );
-
-        refresh();
-      },
-
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Calculation failed",
-        ),
-    });
-
-  const statusMut =
-    useMutation({
-      mutationFn: async (
-        status: any,
-      ) =>
-        await statusFn({
-          data: {
-            id: activeId!,
-            status,
-          },
-        }),
-
-      onSuccess: () => {
-        toast.success(
-          "Status updated",
-        );
-        refresh();
-      },
-
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Could not update status",
-        ),
-    });
-
-  const deleteMut =
-    useMutation({
-      mutationFn: async (
-        id: string,
-      ) =>
-        await removeFn({
-          data: { id },
-        }),
-
-      onSuccess: () => {
-        toast.success(
-          "Combined result deleted",
-        );
-        setSelectedId(
-          null,
-        );
-        refresh();
-      },
-
-      onError: (
-        error: any,
-      ) =>
-        toast.error(
-          error?.message ??
-            "Could not delete result",
-        ),
-    });
-
-  const locked =
-    agg?.status ===
-      "locked" ||
-    agg?.status ===
-      "published";
-
-  const displayNameForKey = (
-    entryKey: string,
-  ) => {
-    const entry =
-      byEntryKey.get(
-        entryKey,
+      (result?.warnings ?? []).forEach((warning: string) =>
+        toast.warning(warning),
       );
 
-    return entry
-      ? getEntryDisplayName(
-          entry,
-        )
-      : entryKey;
+      toast.success(
+        `Combined televote recalculated · v${result?.version ?? "?"}`,
+      );
+    },
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Calculation failed"),
+  });
+
+  const statusMut = useMutation({
+    mutationFn: async (status: "calculated" | "locked" | "published") =>
+      await statusFn({
+        data: {
+          id: activeId!,
+          status,
+        },
+      }),
+
+    onSuccess: () => {
+      refresh();
+      toast.success("Status updated");
+    },
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Could not change status"),
+  });
+
+  const deleteAggMut = useMutation({
+    mutationFn: async () =>
+      await deleteAggFn({
+        data: {
+          id: activeId!,
+        },
+      }),
+
+    onSuccess: () => {
+      setSelectedId(null);
+      refresh();
+      toast.success("Combined televote deleted");
+    },
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Could not delete combined televote"),
+  });
+
+  const locked =
+    agg?.status === "locked" ||
+    agg?.status === "published";
+
+  const enabledSources = sources.filter(
+    (source: any) => source.enabled,
+  );
+
+  const weightTotal = Number(preview?.totalPercentage ?? 0);
+
+  const weightsOkay =
+    Math.abs(weightTotal - 100) < 0.000001;
+
+  const participantSet = new Set(participants);
+
+  const availableKeys = entryCatalog.map(
+    (entry) => entry.entry_key,
+  );
+
+  const participantSyncNeeded =
+    availableKeys.length > 0 &&
+    (participants.length !== availableKeys.length ||
+      availableKeys.some((key) => !participantSet.has(key)));
+
+  const displayName = (entryKey: string) => {
+    const entry = byEntryKey.get(entryKey);
+    return entry ? getEntryDisplayName(entry) : entryKey;
   };
 
   const exportRows = () =>
-    (
-      preview?.rows ?? []
-    ).map((row: any) => ({
+    (preview?.rows ?? []).map((row: any) => ({
       rank: row.finalRank,
-      entry:
-        displayNameForKey(
-          row.code,
-        ),
+      entry: displayName(row.code),
       entry_key: row.code,
-      voting_points:
-        row.totalVotingPoints,
-      activity_points:
-        row.totalActivityPoints,
-      correction:
-        row.finalCorrection,
-      final:
-        row.finalCombinedPoints,
+      voting_points: row.totalVotingPoints,
+      activity_points: row.totalActivityPoints,
+      correction: row.finalCorrection,
+      final_points: row.finalCombinedPoints,
       ...Object.fromEntries(
-        (
-          preview?.pools ??
-          []
-        ).map((pool: any) => [
-          `pool_${pool.sourceName}`,
+        (preview?.pools ?? []).map((pool: any) => [
+          pool.sourceName,
           row.componentResults.find(
-            (
-              component: any,
-            ) =>
-              component.sourceId ===
-              pool.sourceId,
-          )
-            ?.finalAllocatedPoints ??
-            0,
+            (component: any) =>
+              component.sourceId === pool.sourceId,
+          )?.finalAllocatedPoints ?? 0,
         ]),
       ),
     }));
 
+  const resultTotal = (preview?.rows ?? []).reduce(
+    (sum: number, row: any) =>
+      sum + Number(row.finalCombinedPoints ?? 0),
+    0,
+  );
+
   return (
     <AdminShell title="Combined Televote">
-      <div className="space-y-6">
-        <section className="glass space-y-4 rounded-3xl p-5">
-          <div className="flex items-center gap-2">
-            <Layers className="h-5 w-5 text-primary" />
+      <div className="space-y-5 pb-10">
+        <section className="glass-strong rounded-3xl p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-primary">
+                Final televote builder
+              </p>
 
-            <h2 className="text-lg font-semibold">
-              Combined results
-            </h2>
+              <h2 className="mt-1 text-xl font-semibold">
+                Combine every televote source in one place
+              </h2>
+
+              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                Website rounds are read automatically. External sources use the
+                same entry list, so you enter all values in one table instead
+                of selecting countries one by one.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => refresh()}
+                disabled={!activeId}
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Refresh
+              </Button>
+
+              {agg ? (
+                <Button
+                  onClick={() => recalcMut.mutate()}
+                  disabled={
+                    recalcMut.isPending ||
+                    participants.length === 0 ||
+                    !weightsOkay
+                  }
+                >
+                  Recalculate
+                </Button>
+              ) : null}
+            </div>
           </div>
+        </section>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              placeholder="e.g. Grand Final Combined Televote"
-              value={newName}
-              onChange={(
-                event,
-              ) =>
-                setNewName(
-                  event.target.value,
-                )
-              }
-            />
+        <section className="glass rounded-3xl p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_minmax(240px,1fr)_auto]">
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wider text-muted-foreground">
+                Combined result
+              </label>
+
+              <select
+                value={activeId ?? ""}
+                onChange={(event) => {
+                  setSelectedId(event.target.value || null);
+                  setTab("setup");
+                }}
+                className="min-h-11 w-full rounded-xl border border-border bg-background/30 px-3 text-sm"
+              >
+                {(list.data ?? []).length === 0 ? (
+                  <option value="">No combined results yet</option>
+                ) : null}
+
+                {(list.data ?? []).map((item: any) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                  >
+                    {item.name} · {item.status}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wider text-muted-foreground">
+                New combined result
+              </label>
+
+              <Input
+                value={newName}
+                placeholder="Grand Final Combined Televote"
+                onChange={(event) =>
+                  setNewName(event.target.value)
+                }
+              />
+            </div>
 
             <Button
-              onClick={() => {
-                createMut.mutate(
-                  newName.trim(),
-                );
-                setNewName("");
-              }}
+              className="self-end"
               disabled={
-                newName.trim()
-                  .length < 2 ||
+                newName.trim().length < 2 ||
                 createMut.isPending
               }
+              onClick={() => createMut.mutate()}
             >
               <Plus className="h-4 w-4" />
               Create
             </Button>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            {(list.data ?? []).map(
-              (
-                item: any,
-              ) => (
-                <button
-                  key={
-                    item.id
-                  }
-                  onClick={() =>
-                    setSelectedId(
-                      item.id,
-                    )
-                  }
-                  className={`rounded-full border px-4 py-2 text-sm transition ${
-                    item.id ===
-                    activeId
-                      ? "border-primary/60 text-foreground"
-                      : "border-white/10 text-muted-foreground"
-                  }`}
-                >
-                  {item.name}
-
-                  <Badge
-                    variant="outline"
-                    className="ml-2 text-[10px]"
-                  >
-                    {
-                      item.status
-                    }
-                  </Badge>
-                </button>
-              ),
-            )}
-
-            {!list.isLoading &&
-            (list.data ?? [])
-              .length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No combined
-                results yet.
-              </p>
-            ) : null}
-          </div>
         </section>
 
-        {agg ? (
+        {!agg ? (
+          <EmptyPanel text="Create or select a combined result to begin." />
+        ) : detail.isLoading ? (
+          <EmptyPanel text="Loading combined televote…" />
+        ) : detail.error ? (
+          <ErrorPanel
+            text={
+              detail.error instanceof Error
+                ? detail.error.message
+                : "Could not load combined televote"
+            }
+          />
+        ) : (
           <>
-            <section className="glass space-y-5 rounded-3xl p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-base font-semibold">
-                  Configuration
-                </h3>
+            <section className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              <MetricCard
+                label="Entries"
+                value={String(participants.length)}
+              />
 
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">
-                    {agg.status}
-                  </Badge>
+              <MetricCard
+                label="Enabled sources"
+                value={String(enabledSources.length)}
+              />
 
-                  {agg.calculation_version >
-                  0 ? (
-                    <Badge variant="outline">
-                      v
-                      {
-                        agg.calculation_version
-                      }
-                    </Badge>
-                  ) : null}
+              <MetricCard
+                label="Weights"
+                value={`${num(weightTotal)}%`}
+                tone={weightsOkay ? "ok" : "warn"}
+              />
 
-                  {agg.results_outdated ? (
-                    <Badge className="bg-amber-500/20 text-amber-200">
-                      <AlertTriangle className="mr-1 h-3 w-3" />
-                      Outdated
-                    </Badge>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>
-                    Name
-                  </Label>
-
-                  <div className="flex gap-2">
-                    <Input
-                      value={
-                        nameInput
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        setNameInput(
-                          event
-                            .target
-                            .value,
-                        )
-                      }
-                    />
-
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        updateMut.mutate(
-                          {
-                            name: nameInput,
-                          },
-                        )
-                      }
-                    >
-                      <Save className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    Component weights
-                  </Label>
-
-                  <div className="rounded-2xl border border-white/10 px-3 py-2 text-sm">
-                    {preview ? (
-                      <span
-                        className={
-                          Math.abs(
-                            preview.totalPercentage -
-                              100,
-                          ) < 1e-6
-                            ? "text-foreground"
-                            : "text-amber-300"
-                        }
-                      >
-                        Enabled
-                        components
-                        total{" "}
-                        {num(
-                          preview.totalPercentage,
-                        )}
-                        % · must be
-                        exactly 100%
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">
-                        Loading…
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    Total televote
-                    points (T)
-                  </Label>
-
-                  <div className="flex gap-2">
-                    <Input
-                      inputMode="numeric"
-                      value={
-                        tInput
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        setTInput(
-                          event
-                            .target
-                            .value,
-                        )
-                      }
-                    />
-
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        updateMut.mutate(
-                          {
-                            totalPoints:
-                              Number(
-                                tInput,
-                              ),
-                          },
-                        )
-                      }
-                    >
-                      <Save className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    Rank exponent
-                  </Label>
-
-                  <div className="flex gap-2">
-                    <Input
-                      value={
-                        eInput
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        setEInput(
-                          event
-                            .target
-                            .value,
-                        )
-                      }
-                    />
-
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        updateMut.mutate(
-                          {
-                            rankExponent:
-                              Number(
-                                eInput,
-                              ),
-                          },
-                        )
-                      }
-                    >
-                      <Save className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Each enabled
-                component receives
-                its percentage of T.
-                Normal voting
-                sources are
-                rank-weighted inside
-                their own pool;
-                activity and already
-                converted sources are
-                allocated
-                proportionally.
-                Participant
-                identities are
-                stable entry keys.
-              </p>
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() =>
-                    recalcMut.mutate(
-                      locked,
-                    )
-                  }
-                  disabled={
-                    recalcMut.isPending
-                  }
-                >
-                  {recalcMut.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCcw className="h-4 w-4" />
-                  )}
-                  Recalculate
-                </Button>
-
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    statusMut.mutate(
-                      "locked",
-                    )
-                  }
-                >
-                  <Lock className="h-4 w-4" />
-                  Lock
-                </Button>
-
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    statusMut.mutate(
-                      "published",
-                    )
-                  }
-                >
-                  <Radio className="h-4 w-4" />
-                  Publish
-                </Button>
-
-                {locked ? (
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      statusMut.mutate(
-                        "calculated",
-                      )
-                    }
-                  >
-                    Unlock /
-                    unpublish
-                  </Button>
-                ) : null}
-
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    downloadCSV(
-                      `${agg.name}-combined-televote.csv`,
-                      exportRows(),
-                    )
-                  }
-                >
-                  <Download className="h-4 w-4" />
-                  CSV
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    downloadJSON(
-                      `${agg.name}-combined-audit.json`,
-                      {
-                        aggregation:
-                          agg,
-                        participants,
-                        entryCatalog,
-                        sources,
-                        preview,
-                      },
-                    )
-                  }
-                >
-                  Audit JSON
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="text-destructive"
-                  onClick={() =>
-                    deleteMut.mutate(
-                      agg.id,
-                    )
-                  }
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </Button>
-              </div>
-
-              <div className="grid gap-2 border-t border-white/10 pt-2 sm:grid-cols-3">
-                {(
-                  [
-                    [
-                      "sources",
-                      "Show individual source values publicly",
-                    ],
-                    [
-                      "combined_original",
-                      "Show combined original score publicly",
-                    ],
-                    [
-                      "converted",
-                      "Show converted points publicly",
-                    ],
-                    [
-                      "bonus",
-                      "Show bonus / activity points publicly",
-                    ],
-                    [
-                      "final",
-                      "Show final televote score publicly",
-                    ],
-                  ] as const
-                ).map(
-                  ([
-                    key,
-                    label,
-                  ]) => (
-                    <label
-                      key={
-                        key
-                      }
-                      className="flex items-center gap-2 text-xs"
-                    >
-                      <Switch
-                        checked={
-                          key ===
-                            "converted" ||
-                          key ===
-                            "bonus" ||
-                          key ===
-                            "final"
-                            ? (agg
-                                .public_columns?.[
-                                key
-                              ] ??
-                                true) !==
-                              false
-                            : Boolean(
-                                agg
-                                  .public_columns?.[
-                                  key
-                                ],
-                              )
-                        }
-                        onCheckedChange={(
-                          value,
-                        ) =>
-                          updateMut.mutate(
-                            {
-                              publicColumns:
-                                {
-                                  ...(agg.public_columns ??
-                                    {}),
-                                  [key]:
-                                    value,
-                                },
-                            },
-                          )
-                        }
-                      />
-
-                      {label}
-                    </label>
-                  ),
+              <MetricCard
+                label="Pool G"
+                value={String(
+                  agg.total_points_to_distribute ?? 0,
                 )}
-              </div>
-            </section>
+              />
 
-            <ParticipantsSection
-              entries={
-                entryCatalog
-              }
-              participants={
-                participants
-              }
-              onSave={(
-                entryKeys,
-              ) =>
-                participantsMut.mutate(
-                  entryKeys,
-                )
-              }
-            />
+              <MetricCard
+                label="Final total"
+                value={num(resultTotal, 0)}
+              />
 
-            <section className="glass space-y-4 rounded-3xl p-5">
-              <div>
-                <h3 className="text-base font-semibold">
-                  Sources
-                </h3>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Add a website
-                  round first to
-                  make its
-                  round_entries
-                  available in the
-                  participant
-                  selector. Manual
-                  sources then use
-                  those exact
-                  entry_key values.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {sources.map(
-                  (
-                    source: any,
-                  ) => (
-                    <div
-                      key={
-                        source.id
-                      }
-                      className="space-y-3 rounded-2xl border border-white/10 p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Switch
-                          checked={
-                            source.enabled
-                          }
-                          onCheckedChange={(
-                            value,
-                          ) =>
-                            sourceMut.mutate(
-                              {
-                                id: source.id,
-                                enabled:
-                                  value,
-                              },
-                            )
-                          }
-                        />
-
-                        <Input
-                          className="max-w-[220px]"
-                          defaultValue={
-                            source.source_name
-                          }
-                          onBlur={(
-                            event,
-                          ) => {
-                            if (
-                              event
-                                .target
-                                .value !==
-                              source.source_name
-                            ) {
-                              sourceMut.mutate(
-                                {
-                                  id: source.id,
-                                  sourceName:
-                                    event
-                                      .target
-                                      .value,
-                                },
-                              );
-                            }
-                          }}
-                        />
-
-                        <Select
-                          value={
-                            source.calculation_stage
-                          }
-                          onValueChange={(
-                            value,
-                          ) =>
-                            sourceMut.mutate(
-                              {
-                                id: source.id,
-                                stage:
-                                  value,
-                              },
-                            )
-                          }
-                        >
-                          <SelectTrigger className="w-[190px]">
-                            <SelectValue />
-                          </SelectTrigger>
-
-                          <SelectContent>
-                            <SelectItem value="pre_conversion">
-                              Before
-                              conversion
-                            </SelectItem>
-
-                            <SelectItem value="post_conversion">
-                              After
-                              conversion
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-
-                        <Select
-                          value={
-                            source.input_mode ??
-                            "raw_results"
-                          }
-                          onValueChange={(
-                            value,
-                          ) =>
-                            sourceMut.mutate(
-                              {
-                                id: source.id,
-                                inputMode:
-                                  value,
-                              },
-                            )
-                          }
-                        >
-                          <SelectTrigger className="w-[190px]">
-                            <SelectValue />
-                          </SelectTrigger>
-
-                          <SelectContent>
-                            {SOURCE_INPUT_MODES.map(
-                              (
-                                mode,
-                              ) => (
-                                <SelectItem
-                                  key={
-                                    mode.value
-                                  }
-                                  value={
-                                    mode.value
-                                  }
-                                >
-                                  {
-                                    mode.label
-                                  }
-                                </SelectItem>
-                              ),
-                            )}
-                          </SelectContent>
-                        </Select>
-
-                        <div className="flex items-center gap-1">
-                          <Label className="text-xs">
-                            Weight %
-                          </Label>
-
-                          <Input
-                            className="w-24"
-                            defaultValue={String(
-                              source.percentage_weight ??
-                                0,
-                            )}
-                            onBlur={(
-                              event,
-                            ) => {
-                              const next =
-                                Number(
-                                  event
-                                    .target
-                                    .value,
-                                );
-
-                              if (
-                                next !==
-                                Number(
-                                  source.percentage_weight,
-                                )
-                              ) {
-                                sourceMut.mutate(
-                                  {
-                                    id: source.id,
-                                    percentageWeight:
-                                      next,
-                                  },
-                                );
-                              }
-                            }}
-                          />
-                        </div>
-
-                        <Badge
-                          variant="outline"
-                          className="text-[10px]"
-                        >
-                          {SOURCE_TYPES.find(
-                            (
-                              type,
-                            ) =>
-                              type.value ===
-                              source.source_type,
-                          )?.label ??
-                            source.source_type}
-                        </Badge>
-
-                        {!source.source_round_id ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() =>
-                              setEntryDialog(
-                                {
-                                  sourceId:
-                                    source.id,
-                                },
-                              )
-                            }
-                            disabled={
-                              participants.length ===
-                              0
-                            }
-                          >
-                            <Plus className="h-3 w-3" />
-                            Values
-                          </Button>
-                        ) : null}
-
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="ml-auto text-destructive"
-                          onClick={() =>
-                            sourceDeleteMut.mutate(
-                              source.id,
-                            )
-                          }
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      {!source.source_round_id ? (
-                        <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                          {externalEntries
-                            .filter(
-                              (
-                                item: any,
-                              ) =>
-                                item.source_id ===
-                                source.id,
-                            )
-                            .map(
-                              (
-                                item: any,
-                              ) => {
-                                const entryKey =
-                                  item.country_code;
-
-                                return (
-                                  <span
-                                    key={
-                                      item.id
-                                    }
-                                    className="rounded-full border border-white/10 px-2 py-1"
-                                  >
-                                    {displayNameForKey(
-                                      entryKey,
-                                    )}
-                                    :{" "}
-                                    <span className="text-foreground">
-                                      {Number(
-                                        item.value,
-                                      )}
-                                    </span>
-                                  </span>
-                                );
-                              },
-                            )}
-                        </div>
-                      ) : null}
-                    </div>
-                  ),
-                )}
-              </div>
-
-              <AddSourceForm
-                rounds={
-                  rounds ?? []
-                }
-                onAdd={(
-                  patch,
-                ) =>
-                  sourceMut.mutate(
-                    patch,
-                  )
+              <MetricCard
+                label="Status"
+                value={String(agg.status)}
+                tone={
+                  agg.status === "published"
+                    ? "ok"
+                    : agg.results_outdated
+                      ? "warn"
+                      : "normal"
                 }
               />
             </section>
 
-            <section className="glass space-y-3 rounded-3xl p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-semibold">
-                  Combined result
-                  preview
-                </h3>
+            {agg.results_outdated ? (
+              <Callout tone="warn">
+                The sources or settings changed after the last calculation.
+                Recalculate before publishing.
+              </Callout>
+            ) : null}
 
-                {preview ? (
-                  <p className="text-xs text-muted-foreground">
-                    Allocated{" "}
-                    {
-                      preview.allocatedTotal
-                    }{" "}
-                    / G{" "}
-                    {
-                      preview.totalPoints
-                    }{" "}
-                    · Final total{" "}
-                    {num(
-                      preview.finalTotal,
-                    )}
-                  </p>
-                ) : null}
-              </div>
+            {!weightsOkay ? (
+              <Callout tone="warn">
+                Enabled source weights total {num(weightTotal)}%. They must equal
+                exactly 100% before calculation.
+              </Callout>
+            ) : null}
 
-              {(preview?.warnings ??
-                []).map(
-                (
-                  warning: string,
-                ) => (
-                  <p
-                    key={
-                      warning
-                    }
-                    className="text-xs text-amber-300"
-                  >
-                    <AlertTriangle className="mr-1 inline h-3 w-3" />
-                    {warning}
-                  </p>
-                ),
-              )}
+            <nav className="glass flex gap-1 overflow-x-auto rounded-2xl p-1.5">
+              <TabButton
+                active={tab === "setup"}
+                onClick={() => setTab("setup")}
+              >
+                Setup
+              </TabButton>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="py-2 pr-3">
-                        #
-                      </th>
+              <TabButton
+                active={tab === "sources"}
+                onClick={() => setTab("sources")}
+              >
+                Sources
+              </TabButton>
 
-                      <th className="py-2 pr-3">
-                        {entryNoun(
-                          entryCatalog,
-                          false,
-                        )}
-                      </th>
+              <TabButton
+                active={tab === "results"}
+                onClick={() => setTab("results")}
+              >
+                Results
+              </TabButton>
 
-                      {(preview?.pools ??
-                        []).map(
-                        (
-                          pool: any,
-                        ) => (
-                          <th
-                            key={
-                              pool.sourceId
-                            }
-                            className="py-2 pr-3 text-right"
-                          >
-                            {
-                              pool.sourceName
-                            }
+              <TabButton
+                active={tab === "public"}
+                onClick={() => setTab("public")}
+              >
+                Publish
+              </TabButton>
+            </nav>
 
-                            <span className="block text-[10px] normal-case text-muted-foreground">
-                              {num(
-                                pool.percentageWeight,
-                              )}
-                              % ·{" "}
-                              {
-                                pool.finalPool
-                              }{" "}
-                              pts
-                            </span>
-                          </th>
-                        ),
-                      )}
+            {tab === "setup" ? (
+              <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+                <Panel
+                  title="Combined settings"
+                  subtitle="The small number of settings that actually control the final calculation."
+                >
+                  <div className="space-y-4">
+                    <Field label="Name">
+                      <div className="flex gap-2">
+                        <Input
+                          value={nameInput}
+                          onChange={(event) =>
+                            setNameInput(event.target.value)
+                          }
+                        />
 
-                      <th className="py-2 pr-3 text-right">
-                        Voting
-                      </th>
-
-                      <th className="py-2 pr-3 text-right">
-                        Activity
-                      </th>
-
-                      <th className="py-2 pr-3 text-right">
-                        Correction
-                      </th>
-
-                      <th className="py-2 pr-3 text-right">
-                        Final
-                      </th>
-
-                      <th />
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {(preview?.rows ??
-                      []).map(
-                      (
-                        row: any,
-                      ) => {
-                        const entry =
-                          byEntryKey.get(
-                            row.code,
-                          );
-
-                        const open =
-                          expanded ===
-                          row.code;
-
-                        const componentFor =
-                          (
-                            sourceId: string,
-                          ) =>
-                            row.componentResults.find(
-                              (
-                                component: any,
-                              ) =>
-                                component.sourceId ===
-                                sourceId,
-                            );
-
-                        return (
-                          <>
-                            <tr
-                              key={
-                                row.code
-                              }
-                              className="border-t border-white/5"
-                            >
-                              <td className="py-2 pr-3 tabular-nums">
-                                {
-                                  row.finalRank
-                                }
-                              </td>
-
-                              <td className="py-2 pr-3">
-                                <span className="flex items-center gap-2">
-                                  <EntryAvatar
-                                    entry={
-                                      entry
-                                    }
-                                    size={
-                                      18
-                                    }
-                                  />
-
-                                  {displayNameForKey(
-                                    row.code,
-                                  )}
-                                </span>
-                              </td>
-
-                              {(preview?.pools ??
-                                []).map(
-                                (
-                                  pool: any,
-                                ) => {
-                                  const component =
-                                    componentFor(
-                                      pool.sourceId,
-                                    );
-
-                                  return (
-                                    <td
-                                      key={
-                                        pool.sourceId
-                                      }
-                                      className="py-2 pr-3 text-right tabular-nums"
-                                    >
-                                      {component ? (
-                                        <>
-                                          <span className="font-medium">
-                                            {
-                                              component.finalAllocatedPoints
-                                            }
-                                          </span>
-
-                                          <span className="block text-[10px] text-muted-foreground">
-                                            raw{" "}
-                                            {num(
-                                              component.rawScore,
-                                            )}
-                                            {component.rawRank
-                                              ? ` · #${component.rawRank}`
-                                              : ""}
-                                          </span>
-                                        </>
-                                      ) : (
-                                        <span className="text-muted-foreground">
-                                          0*
-                                        </span>
-                                      )}
-                                    </td>
-                                  );
-                                },
-                              )}
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {
-                                  row.totalVotingPoints
-                                }
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {
-                                  row.totalActivityPoints
-                                }
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {num(
-                                  row.finalCorrection,
-                                )}
-                              </td>
-
-                              <td className="py-2 pr-3 text-right text-base font-semibold tabular-nums">
-                                {
-                                  row.finalCombinedPoints
-                                }
-                              </td>
-
-                              <td>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setExpanded(
-                                      open
-                                        ? null
-                                        : row.code,
-                                    )
-                                  }
-                                  className="text-muted-foreground"
-                                >
-                                  <ChevronDown
-                                    className={`h-4 w-4 transition ${
-                                      open
-                                        ? "rotate-180"
-                                        : ""
-                                    }`}
-                                  />
-                                </button>
-                              </td>
-                            </tr>
-
-                            {open ? (
-                              <tr
-                                key={`${row.code}-details`}
-                                className="bg-white/[0.03]"
-                              >
-                                <td
-                                  colSpan={
-                                    7 +
-                                    (preview?.pools ??
-                                      [])
-                                      .length
-                                  }
-                                  className="space-y-2 p-3 text-xs"
-                                >
-                                  {row.componentResults.map(
-                                    (
-                                      component: any,
-                                    ) => (
-                                      <div
-                                        key={
-                                          component.sourceId
-                                        }
-                                        className="space-y-0.5"
-                                      >
-                                        <p className="font-medium text-foreground">
-                                          {
-                                            component.sourceName
-                                          }{" "}
-                                          ·{" "}
-                                          {
-                                            component.method
-                                          }{" "}
-                                          · pool{" "}
-                                          {(
-                                            preview?.pools ??
-                                            []
-                                          ).find(
-                                            (
-                                              pool: any,
-                                            ) =>
-                                              pool.sourceId ===
-                                              component.sourceId,
-                                          )
-                                            ?.finalPool ??
-                                            0}
-                                        </p>
-
-                                        {component.method ===
-                                        "rank_weighted" ? (
-                                          <p>
-                                            Rank #
-                                            {
-                                              component.rawRank
-                                            }{" "}
-                                            · factor{" "}
-                                            {num(
-                                              component.rankFactor,
-                                              4,
-                                            )}{" "}
-                                            · weighted{" "}
-                                            {num(
-                                              component.weightedScore,
-                                              4,
-                                            )}{" "}
-                                            /{" "}
-                                            {num(
-                                              component.sourceWeightedTotal,
-                                              4,
-                                            )}
-                                          </p>
-                                        ) : (
-                                          <p>
-                                            Raw
-                                            value{" "}
-                                            {num(
-                                              component.rawScore,
-                                            )}
-                                          </p>
-                                        )}
-
-                                        <p>
-                                          Exact{" "}
-                                          {num(
-                                            component.exactAllocation,
-                                            6,
-                                          )}{" "}
-                                          → floored{" "}
-                                          {
-                                            component.flooredAllocation
-                                          }{" "}
-                                          + remainder
-                                          bonus{" "}
-                                          {
-                                            component.remainderBonus
-                                          }{" "}
-                                          ={" "}
-                                          {
-                                            component.finalAllocatedPoints
-                                          }
-                                        </p>
-                                      </div>
-                                    ),
-                                  )}
-
-                                  <p className="border-t border-white/10 pt-2">
-                                    Final =
-                                    voting{" "}
-                                    {
-                                      row.totalVotingPoints
-                                    }{" "}
-                                    + activity{" "}
-                                    {
-                                      row.totalActivityPoints
-                                    }{" "}
-                                    +
-                                    correction{" "}
-                                    {num(
-                                      row.finalCorrection,
-                                    )}{" "}
-                                    ={" "}
-                                    {
-                                      row.finalCombinedPoints
-                                    }
-                                  </p>
-                                </td>
-                              </tr>
-                            ) : null}
-                          </>
-                        );
-                      },
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <p className="text-[11px] text-muted-foreground">
-                0* means the
-                entry has no value
-                in that source and
-                is counted as zero.
-              </p>
-            </section>
-
-            {log.length > 0 ? (
-              <section className="glass space-y-2 rounded-3xl p-5">
-                <h3 className="text-base font-semibold">
-                  Manual change
-                  history
-                </h3>
-
-                <div className="max-h-64 space-y-1 overflow-y-auto text-xs text-muted-foreground">
-                  {log.map(
-                    (
-                      item: any,
-                    ) => {
-                      const entryKey =
-                        item.country_code;
-
-                      return (
-                        <div
-                          key={
-                            item.id
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            updateMut.mutate({
+                              name: nameInput,
+                            })
                           }
                         >
-                          {new Date(
-                            item.created_at,
-                          ).toLocaleString()}{" "}
-                          ·{" "}
-                          <span className="text-foreground">
-                            {
-                              item.actor_username
-                            }
-                          </span>{" "}
-                          ·{" "}
-                          {displayNameForKey(
-                            entryKey,
-                          )}
-                          :{" "}
-                          {Number(
-                            item.previous_value,
-                          )}{" "}
-                          →{" "}
-                          {Number(
-                            item.new_value,
-                          )}{" "}
-                          (
-                          {Number(
-                            item.delta,
-                          ) >= 0
-                            ? "+"
-                            : ""}
-                          {Number(
-                            item.delta,
-                          )}
-                          ) ·{" "}
-                          {
-                            item.entry_type
-                          }{" "}
-                          ·{" "}
-                          {
-                            item.reason
+                          <Save className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </Field>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Final televote pool G">
+                        <Input
+                          inputMode="numeric"
+                          value={tInput}
+                          onChange={(event) =>
+                            setTInput(
+                              event.target.value.replace(
+                                /[^0-9]/g,
+                                "",
+                              ),
+                            )
                           }
+                          onBlur={() => {
+                            const value = Number(tInput);
+
+                            if (
+                              Number.isInteger(value) &&
+                              value >= 0 &&
+                              value !==
+                                Number(
+                                  agg.total_points_to_distribute,
+                                )
+                            ) {
+                              updateMut.mutate({
+                                totalPoints: value,
+                              });
+                            }
+                          }}
+                        />
+                      </Field>
+
+                      <Field label="Rank exponent">
+                        <Input
+                          inputMode="decimal"
+                          value={eInput}
+                          onChange={(event) =>
+                            setEInput(event.target.value)
+                          }
+                          onBlur={() => {
+                            const value = Number(eInput);
+
+                            if (
+                              Number.isFinite(value) &&
+                              value > 0 &&
+                              value <= 5 &&
+                              value !==
+                                Number(agg.rank_exponent)
+                            ) {
+                              updateMut.mutate({
+                                rankExponent: value,
+                              });
+                            }
+                          }}
+                        />
+                      </Field>
+                    </div>
+
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      G is divided between enabled sources by percentage. Raw
+                      voting sources are rank-weighted inside their own pool.
+                      Converted and activity sources are rescaled
+                      proportionally.
+                    </p>
+                  </div>
+                </Panel>
+
+                <Panel
+                  title="Entries"
+                  subtitle="The combined result should normally use the exact same entries as its linked website voting round."
+                >
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <MiniStat
+                        label="Available from linked rounds"
+                        value={String(entryCatalog.length)}
+                      />
+                      <MiniStat
+                        label="Currently included"
+                        value={String(participants.length)}
+                      />
+                      <MiniStat
+                        label="Missing"
+                        value={String(
+                          Math.max(
+                            0,
+                            entryCatalog.length -
+                              participants.length,
+                          ),
+                        )}
+                      />
+                    </div>
+
+                    {entryCatalog.length === 0 ? (
+                      <Callout tone="warn">
+                        Add a website voting round in Sources first. Its
+                        round_entries become the entry list for this combined
+                        televote.
+                      </Callout>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            onClick={() =>
+                              participantsMut.mutate(
+                                availableKeys,
+                              )
+                            }
+                            disabled={
+                              locked ||
+                              participantsMut.isPending ||
+                              !participantSyncNeeded
+                            }
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            {participantSyncNeeded
+                              ? `Use all ${entryCatalog.length} linked entries`
+                              : "Entries already synced"}
+                          </Button>
+
+                          <span className="self-center text-xs text-muted-foreground">
+                            Website-round entries sync automatically. This button is only a manual resync.
+                          </span>
                         </div>
-                      );
-                    },
+
+                        <div className="flex max-h-52 flex-wrap gap-2 overflow-y-auto">
+                          {entryCatalog.map((entry) => {
+                            const included =
+                              participantSet.has(
+                                entry.entry_key,
+                              );
+
+                            return (
+                              <span
+                                key={entry.entry_key}
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+                                  included
+                                    ? "border-primary/35 bg-primary/10"
+                                    : "border-border/60 text-muted-foreground"
+                                }`}
+                              >
+                                <EntryAvatar
+                                  entry={entry}
+                                  size={16}
+                                />
+                                {getEntryDisplayName(entry)}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </Panel>
+              </div>
+            ) : null}
+
+            {tab === "sources" ? (
+              <div className="space-y-5">
+                <Panel
+                  title="Source weights"
+                  subtitle="Each source is one component of the final televote. Manual sources use one bulk value table."
+                >
+                  <div className="space-y-3">
+                    {sources.length === 0 ? (
+                      <EmptyPanel text="No sources yet." />
+                    ) : (
+                      sources.map((source: any) => (
+                        <SourceCard
+                          key={source.id}
+                          source={source}
+                          rounds={rounds}
+                          participants={participants}
+                          entryCatalog={entryCatalog}
+                          externalEntries={externalEntries}
+                          locked={locked}
+                          onSourcePatch={(patch) =>
+                            sourceMut.mutate({
+                              id: source.id,
+                              ...patch,
+                            })
+                          }
+                          onDelete={() =>
+                            deleteSourceMut.mutate(
+                              source.id,
+                            )
+                          }
+                          onSavedValues={refresh}
+                        />
+                      ))
+                    )}
+                  </div>
+                </Panel>
+
+                <AddSourcePanel
+                  rounds={rounds}
+                  disabled={!activeId || locked}
+                  onAdd={(patch) =>
+                    sourceMut.mutate(patch)
+                  }
+                />
+              </div>
+            ) : null}
+
+            {tab === "results" ? (
+              <div className="space-y-5">
+                <Panel
+                  title="Component pools"
+                  subtitle="A quick audit of where the final points are coming from."
+                >
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {(preview?.pools ?? []).map((pool: any) => (
+                      <div
+                        key={pool.sourceId}
+                        className="rounded-2xl border border-border/60 bg-card/20 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium">
+                            {pool.sourceName}
+                          </p>
+                          <span className="text-sm font-semibold tabular-nums">
+                            {pool.finalPool}
+                          </span>
+                        </div>
+
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {num(pool.percentageWeight)}% ·{" "}
+                          {String(pool.method).replace(
+                            /_/g,
+                            " ",
+                          )}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+
+                <Panel
+                  title="Final combined result"
+                  subtitle="Ranked final televote after every enabled component has been allocated."
+                >
+                  {(preview?.warnings ?? []).map(
+                    (warning: string) => (
+                      <Callout
+                        key={warning}
+                        tone="warn"
+                      >
+                        {warning}
+                      </Callout>
+                    ),
                   )}
-                </div>
-              </section>
+
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-sm">
+                      <thead className="text-xs uppercase text-muted-foreground">
+                        <tr>
+                          <th className="p-2 text-left">
+                            #
+                          </th>
+                          <th className="p-2 text-left">
+                            {entryNoun(entryCatalog, false)}
+                          </th>
+
+                          {(preview?.pools ?? []).map(
+                            (pool: any) => (
+                              <th
+                                key={pool.sourceId}
+                                className="p-2 text-right"
+                              >
+                                {pool.sourceName}
+                              </th>
+                            ),
+                          )}
+
+                          <th className="p-2 text-right">
+                            Final
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {(preview?.rows ?? []).map(
+                          (row: any) => {
+                            const entry =
+                              byEntryKey.get(row.code);
+
+                            return (
+                              <tr
+                                key={row.code}
+                                className="border-t border-border/50"
+                              >
+                                <td className="p-2 font-semibold tabular-nums">
+                                  {row.finalRank}
+                                </td>
+
+                                <td className="p-2">
+                                  <span className="inline-flex items-center gap-2 font-medium">
+                                    <EntryAvatar
+                                      entry={entry}
+                                      size={22}
+                                    />
+                                    {displayName(row.code)}
+                                  </span>
+                                </td>
+
+                                {(preview?.pools ?? []).map(
+                                  (pool: any) => (
+                                    <td
+                                      key={pool.sourceId}
+                                      className="p-2 text-right tabular-nums"
+                                    >
+                                      {row.componentResults.find(
+                                        (component: any) =>
+                                          component.sourceId ===
+                                          pool.sourceId,
+                                      )?.finalAllocatedPoints ?? 0}
+                                    </td>
+                                  ),
+                                )}
+
+                                <td className="p-2 text-right text-base font-semibold tabular-nums">
+                                  {row.finalCombinedPoints}
+                                </td>
+                              </tr>
+                            );
+                          },
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        downloadCSV(
+                          `${agg.name}-combined-televote.csv`,
+                          exportRows(),
+                        )
+                      }
+                    >
+                      <Download className="h-4 w-4" />
+                      CSV
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        downloadJSON(
+                          `${agg.name}-combined-audit.json`,
+                          {
+                            aggregation: agg,
+                            participants,
+                            entryCatalog,
+                            sources,
+                            preview,
+                          },
+                        )
+                      }
+                    >
+                      Audit JSON
+                    </Button>
+                  </div>
+                </Panel>
+              </div>
+            ) : null}
+
+            {tab === "public" ? (
+              <div className="grid gap-5 xl:grid-cols-2">
+                <Panel
+                  title="Result status"
+                  subtitle="Lock once the math is final. Publish only after all source weights and entries are correct."
+                >
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusPill
+                        status={String(agg.status)}
+                      />
+
+                      {agg.calculation_version > 0 ? (
+                        <span className="rounded-full border border-border/60 px-2.5 py-1 text-xs">
+                          v{agg.calculation_version}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() =>
+                          recalcMut.mutate()
+                        }
+                        disabled={
+                          recalcMut.isPending ||
+                          !weightsOkay ||
+                          participants.length === 0
+                        }
+                      >
+                        <RefreshCcw className="h-4 w-4" />
+                        Recalculate
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          statusMut.mutate("locked")
+                        }
+                        disabled={
+                          !agg.calculation_version ||
+                          statusMut.isPending
+                        }
+                      >
+                        <Lock className="h-4 w-4" />
+                        Lock
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          statusMut.mutate("published")
+                        }
+                        disabled={
+                          !agg.calculation_version ||
+                          statusMut.isPending
+                        }
+                      >
+                        <Radio className="h-4 w-4" />
+                        Publish
+                      </Button>
+
+                      {locked ? (
+                        <Button
+                          variant="ghost"
+                          onClick={() =>
+                            statusMut.mutate("calculated")
+                          }
+                        >
+                          Unlock
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </Panel>
+
+                <Panel
+                  title="Public result columns"
+                  subtitle="Choose what the public combined-result page is allowed to show."
+                >
+                  <div className="space-y-3">
+                    {(
+                      [
+                        [
+                          "sources",
+                          "Individual source values",
+                        ],
+                        [
+                          "combined_original",
+                          "Combined original score",
+                        ],
+                        [
+                          "converted",
+                          "Converted points",
+                        ],
+                        [
+                          "bonus",
+                          "Activity / bonus points",
+                        ],
+                        [
+                          "final",
+                          "Final televote score",
+                        ],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <label
+                        key={key}
+                        className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-border/60 px-3"
+                      >
+                        <span className="text-sm">
+                          {label}
+                        </span>
+
+                        <Switch
+                          checked={
+                            key === "converted" ||
+                            key === "bonus" ||
+                            key === "final"
+                              ? (agg.public_columns?.[
+                                  key
+                                ] ?? true) !== false
+                              : Boolean(
+                                  agg.public_columns?.[
+                                    key
+                                  ],
+                                )
+                          }
+                          onCheckedChange={(value) =>
+                            updateMut.mutate({
+                              publicColumns: {
+                                ...(agg.public_columns ??
+                                  {}),
+                                [key]: value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </Panel>
+
+                <Panel
+                  title="Danger zone"
+                  subtitle="Deletion is blocked while the combined result is published."
+                >
+                  <Button
+                    variant="outline"
+                    className="text-destructive"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Delete "${agg.name}"?`,
+                        )
+                      ) {
+                        deleteAggMut.mutate();
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete combined result
+                  </Button>
+                </Panel>
+              </div>
             ) : null}
           </>
-        ) : null}
-      </div>
-
-      <ManualEntryDialog
-        open={
-          Boolean(
-            entryDialog,
-          )
-        }
-        onOpenChange={(
-          open,
-        ) => {
-          if (!open) {
-            setEntryDialog(
-              null,
-            );
-          }
-        }}
-        entries={entryCatalog.filter(
-          (entry) =>
-            participants.includes(
-              entry.entry_key,
-            ),
         )}
-        onSave={(
-          payload,
-        ) => {
-          if (
-            !entryDialog
-          ) {
-            return;
-          }
-
-          entryMut.mutate({
-            ...payload,
-            sourceId:
-              entryDialog.sourceId,
-          });
-        }}
-      />
+      </div>
     </AdminShell>
   );
 }
 
-function ParticipantsSection({
-  entries,
+function SourceCard({
+  source,
+  rounds,
   participants,
-  onSave,
+  entryCatalog,
+  externalEntries,
+  locked,
+  onSourcePatch,
+  onDelete,
+  onSavedValues,
 }: {
-  entries: ResolvedEntry[];
+  source: any;
+  rounds: any[];
   participants: string[];
-  onSave: (
-    entryKeys: string[],
-  ) => void;
+  entryCatalog: ResolvedEntry[];
+  externalEntries: any[];
+  locked: boolean;
+  onSourcePatch: (patch: any) => void;
+  onDelete: () => void;
+  onSavedValues: () => void;
 }) {
-  const [
-    selected,
-    setSelected,
-  ] = useState<string[]>(
-    participants,
+  const [openValues, setOpenValues] = useState(false);
+
+  const linkedRound = rounds.find(
+    (round) => round.id === source.source_round_id,
   );
 
-  const [
-    search,
-    setSearch,
-  ] = useState("");
-
-  useEffect(() => {
-    setSelected(
-      participants,
-    );
-  }, [
-    participants.join("|"),
-  ]);
-
-  const filtered =
-    useMemo(() => {
-      const query =
-        search
-          .trim()
-          .toLowerCase();
-
-      if (!query) {
-        return entries;
-      }
-
-      return entries.filter(
-        (entry) => {
-          const name =
-            getEntryDisplayName(
-              entry,
-            ).toLowerCase();
-
-          const code =
-            getEntryCode(
-              entry,
-            ).toLowerCase();
-
-          return (
-            name.includes(
-              query,
-            ) ||
-            code.includes(
-              query,
-            ) ||
-            entry.entry_key
-              .toLowerCase()
-              .includes(query) ||
-            (
-              entry.subtitle ??
-              ""
-            )
-              .toLowerCase()
-              .includes(query)
-          );
-        },
-      );
-    }, [entries, search]);
+  const manual = !source.source_round_id;
 
   return (
-    <section className="glass space-y-3 rounded-3xl p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold">
-            Eligible entries{" "}
-            <span className="text-sm text-muted-foreground">
-              (
-              {
-                selected.length
+    <section className="rounded-3xl border border-border/60 bg-card/20 p-4">
+      <div className="flex flex-wrap items-start gap-3">
+        <Switch
+          checked={Boolean(source.enabled)}
+          onCheckedChange={(enabled) =>
+            onSourcePatch({ enabled })
+          }
+          disabled={locked}
+        />
+
+        <div className="min-w-[180px] flex-1">
+          <Input
+            defaultValue={source.source_name}
+            disabled={locked}
+            onBlur={(event) => {
+              const value = event.target.value.trim();
+
+              if (
+                value &&
+                value !== source.source_name
+              ) {
+                onSourcePatch({
+                  sourceName: value,
+                });
               }
-              )
-            </span>
-          </h3>
+            }}
+          />
 
           <p className="mt-1 text-xs text-muted-foreground">
-            Entries come from
-            round_entries in the
-            linked voting round
-            sources. Identical
-            display names are not
-            treated as the same
-            participant.
+            {linkedRound
+              ? `Linked to ${linkedRound.edition_name ? `${linkedRound.edition_name} · ` : ""}${linkedRound.name}`
+              : manual
+                ? "Manual source · all entries edited together"
+                : ""}
           </p>
+        </div>
+
+        <div className="w-24">
+          <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">
+            Weight %
+          </label>
+
+          <Input
+            defaultValue={String(
+              source.percentage_weight ?? 0,
+            )}
+            inputMode="decimal"
+            disabled={locked}
+            onBlur={(event) => {
+              const value = Number(
+                event.target.value,
+              );
+
+              if (
+                Number.isFinite(value) &&
+                value >= 0 &&
+                value <= 100 &&
+                value !==
+                  Number(
+                    source.percentage_weight,
+                  )
+              ) {
+                onSourcePatch({
+                  percentageWeight: value,
+                });
+              }
+            }}
+          />
         </div>
 
         <Button
           size="sm"
-          onClick={() =>
-            onSave(
-              selected,
-            )
-          }
+          variant="ghost"
+          className="text-destructive"
+          onClick={onDelete}
+          disabled={locked}
         >
-          Save entries
+          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
 
-      {entries.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-muted-foreground">
-          No round entries are
-          available yet. Add a
-          website voting round as
-          a source first.
-        </div>
-      ) : (
-        <>
-          <Input
-            placeholder="Search entries…"
-            value={search}
-            onChange={(
-              event,
-            ) =>
-              setSearch(
-                event.target
-                  .value,
-              )
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span className="rounded-full border border-border/60 px-2.5 py-1 text-[11px]">
+          {SOURCE_TYPES.find(
+            (type) =>
+              type.value === source.source_type,
+          )?.label ?? source.source_type}
+        </span>
+
+        <span className="rounded-full border border-border/60 px-2.5 py-1 text-[11px]">
+          {labelForInputMode(
+            source.input_mode ?? "raw_results",
+          )}
+        </span>
+
+        <span className="rounded-full border border-border/60 px-2.5 py-1 text-[11px]">
+          {source.calculation_stage ===
+          "post_conversion"
+            ? "After conversion"
+            : "Before conversion"}
+        </span>
+
+        {manual ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              setOpenValues((value) => !value)
             }
-          />
+            disabled={
+              participants.length === 0
+            }
+          >
+            {openValues
+              ? "Close values"
+              : `Edit all ${participants.length} values`}
+          </Button>
+        ) : null}
+      </div>
 
-          <ScrollArea className="h-64 rounded-2xl border border-white/10 p-2">
-            <div className="grid gap-1 sm:grid-cols-2">
-              {filtered.map(
-                (entry) => {
-                  const checked =
-                    selected.includes(
-                      entry.entry_key,
-                    );
+      <details className="mt-3 rounded-2xl border border-border/50 p-3">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+          Advanced source settings
+        </summary>
 
-                  return (
-                    <label
-                      key={
-                        entry.entry_key
-                      }
-                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-white/[0.03]"
-                    >
-                      <Checkbox
-                        checked={
-                          checked
-                        }
-                        onCheckedChange={(
-                          value,
-                        ) =>
-                          setSelected(
-                            (
-                              previous,
-                            ) =>
-                              value
-                                ? previous.includes(
-                                    entry.entry_key,
-                                  )
-                                  ? previous
-                                  : [
-                                      ...previous,
-                                      entry.entry_key,
-                                    ]
-                                : previous.filter(
-                                    (
-                                      key,
-                                    ) =>
-                                      key !==
-                                      entry.entry_key,
-                                  ),
-                          )
-                        }
-                      />
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Field label="Input mode">
+            <select
+              value={
+                source.input_mode ??
+                "raw_results"
+              }
+              disabled={locked}
+              onChange={(event) =>
+                onSourcePatch({
+                  inputMode: event.target.value,
+                })
+              }
+              className="min-h-11 w-full rounded-xl border border-border bg-background/30 px-3 text-sm"
+            >
+              {SOURCE_INPUT_MODES.map((mode) => (
+                <option
+                  key={mode.value}
+                  value={mode.value}
+                >
+                  {mode.label}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-                      <EntryAvatar
-                        entry={
-                          entry
-                        }
-                        size={20}
-                      />
+          <Field label="Calculation stage">
+            <select
+              value={
+                source.calculation_stage ??
+                "pre_conversion"
+              }
+              disabled={locked}
+              onChange={(event) =>
+                onSourcePatch({
+                  stage: event.target.value,
+                })
+              }
+              className="min-h-11 w-full rounded-xl border border-border bg-background/30 px-3 text-sm"
+            >
+              <option value="pre_conversion">
+                Before conversion
+              </option>
+              <option value="post_conversion">
+                After conversion
+              </option>
+            </select>
+          </Field>
+        </div>
+      </details>
 
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">
-                          {getEntryDisplayName(
-                            entry,
-                          )}
-                        </span>
-
-                        <span className="block truncate text-[10px] text-muted-foreground">
-                          {getEntryCode(
-                            entry,
-                          )}
-                          {entry.subtitle
-                            ? ` · ${entry.subtitle}`
-                            : ""}
-                        </span>
-                      </span>
-                    </label>
-                  );
-                },
-              )}
-            </div>
-          </ScrollArea>
-        </>
-      )}
+      {openValues && manual ? (
+        <ManualValuesEditor
+          source={source}
+          participants={participants}
+          entryCatalog={entryCatalog}
+          existingEntries={externalEntries.filter(
+            (entry) =>
+              entry.source_id === source.id,
+          )}
+          locked={locked}
+          onSaved={onSavedValues}
+        />
+      ) : null}
     </section>
   );
 }
 
-function AddSourceForm({
-  rounds,
-  onAdd,
+function ManualValuesEditor({
+  source,
+  participants,
+  entryCatalog,
+  existingEntries,
+  locked,
+  onSaved,
 }: {
-  rounds: any[];
-  onAdd: (
-    patch: any,
-  ) => void;
+  source: any;
+  participants: string[];
+  entryCatalog: ResolvedEntry[];
+  existingEntries: any[];
+  locked: boolean;
+  onSaved: () => void;
 }) {
-  const [
-    type,
-    setType,
-  ] = useState("round");
-
-  const [
-    roundId,
-    setRoundId,
-  ] = useState("");
-
-  const [
-    name,
-    setName,
-  ] = useState("");
-
-  const [
-    stage,
-    setStage,
-  ] = useState(
-    "pre_conversion",
+  const bulkFn = useServerFn(
+    saveExternalSourceValues,
   );
 
-  const [
-    mode,
-    setMode,
-  ] = useState(
-    "raw_results",
+  const catalog = useMemo(
+    () => entryMap(entryCatalog),
+    [entryCatalog],
   );
 
-  const [
-    weight,
-    setWeight,
-  ] = useState("0");
+  const existing = useMemo(
+    () =>
+      new Map(
+        existingEntries.map((row) => [
+          String(row.country_code),
+          Number(row.value ?? 0),
+        ]),
+      ),
+    [existingEntries],
+  );
+
+  const [values, setValues] = useState<
+    Record<string, string>
+  >({});
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+
+    for (const entryKey of participants) {
+      next[entryKey] = String(
+        existing.get(entryKey) ?? 0,
+      );
+    }
+
+    setValues(next);
+  }, [
+    source.id,
+    participants.join("|"),
+    existingEntries
+      .map(
+        (row) =>
+          `${row.country_code}:${row.value}`,
+      )
+      .join("|"),
+  ]);
+
+  const saveMut = useMutation({
+    mutationFn: async () =>
+      await bulkFn({
+        data: {
+          sourceId: source.id,
+          values: participants.map(
+            (entryKey) => ({
+              entryKey,
+              value: Number(
+                values[entryKey] ?? 0,
+              ),
+            }),
+          ),
+        },
+      }),
+
+    onSuccess: (result: any) => {
+      onSaved();
+
+      toast.success(
+        `Saved ${result?.saved ?? participants.length} values`,
+      );
+    },
+
+    onError: (error: any) =>
+      toast.error(
+        error?.message ??
+          "Could not save source values",
+      ),
+  });
+
+  const total = participants.reduce(
+    (sum, entryKey) =>
+      sum +
+      (Number(values[entryKey]) || 0),
+    0,
+  );
 
   return (
-    <div className="grid items-end gap-2 rounded-2xl border border-dashed border-white/15 p-3 sm:grid-cols-6">
-      <div className="space-y-1">
-        <Label className="text-xs">
-          Type
-        </Label>
+    <div className="mt-4 rounded-3xl border border-primary/25 bg-primary/[0.04] p-3 sm:p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="font-semibold">
+            Bulk values
+          </h4>
 
-        <Select
-          value={type}
-          onValueChange={(
-            value,
-          ) => {
-            setType(
-              value,
-            );
+          <p className="mt-1 text-xs text-muted-foreground">
+            The entry list comes from the linked website round. No selecting
+            countries and no reason field for every value.
+          </p>
+        </div>
 
-            if (
-              value !==
-              "round"
-            ) {
-              setRoundId(
-                "",
-              );
-            }
-
-            if (
-              value ===
-              "activity"
-            ) {
-              setStage(
-                "post_conversion",
-              );
-              setMode(
-                "activity_points",
-              );
-            }
-
-            if (
-              value ===
-              "correction"
-            ) {
-              setMode(
-                "correction",
-              );
-            }
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-
-          <SelectContent>
-            {SOURCE_TYPES.map(
-              (item) => (
-                <SelectItem
-                  key={
-                    item.value
-                  }
-                  value={
-                    item.value
-                  }
-                >
-                  {
-                    item.label
-                  }
-                </SelectItem>
-              ),
-            )}
-          </SelectContent>
-        </Select>
+        <div className="text-right">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Raw total
+          </p>
+          <p className="text-lg font-semibold tabular-nums">
+            {num(total)}
+          </p>
+        </div>
       </div>
 
-      {type === "round" ? (
-        <div className="space-y-1">
-          <Label className="text-xs">
-            Voting round
-          </Label>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {participants.map((entryKey) => {
+          const entry = catalog.get(entryKey);
 
-          <Select
-            value={
-              roundId
-            }
-            onValueChange={(
-              value,
-            ) => {
-              setRoundId(
-                value,
-              );
+          return (
+            <label
+              key={entryKey}
+              className="grid grid-cols-[minmax(0,1fr)_92px] items-center gap-3 rounded-2xl border border-border/55 bg-background/15 p-2.5"
+            >
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <EntryAvatar
+                  entry={entry}
+                  size={20}
+                />
 
-              const round =
-                rounds.find(
-                  (item) =>
-                    item.id ===
-                    value,
-                );
+                <span className="truncate text-sm font-medium">
+                  {entry
+                    ? getEntryDisplayName(entry)
+                    : entryKey}
+                </span>
+              </span>
 
-              if (
-                round &&
-                !name
-              ) {
-                setName(
-                  round.name,
-                );
-              }
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select round" />
-            </SelectTrigger>
+              <Input
+                inputMode="decimal"
+                value={
+                  values[entryKey] ?? "0"
+                }
+                disabled={locked}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    [entryKey]:
+                      event.target.value,
+                  }))
+                }
+              />
+            </label>
+          );
+        })}
+      </div>
 
-            <SelectContent>
-              {rounds.map(
-                (
-                  round,
-                ) => (
-                  <SelectItem
-                    key={
-                      round.id
-                    }
-                    value={
-                      round.id
-                    }
-                  >
-                    {round.edition_name
-                      ? `${round.edition_name} — `
-                      : ""}
-                    {
-                      round.name
-                    }
-                  </SelectItem>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button
+          onClick={() => saveMut.mutate()}
+          disabled={
+            locked ||
+            saveMut.isPending ||
+            participants.some(
+              (entryKey) =>
+                !Number.isFinite(
+                  Number(
+                    values[entryKey] ?? 0,
+                  ),
                 ),
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : (
-        <div className="space-y-1">
-          <Label className="text-xs">
-            Source name
-          </Label>
-
-          <Input
-            value={
-              name
-            }
-            onChange={(
-              event,
-            ) =>
-              setName(
-                event.target
-                  .value,
-              )
-            }
-          />
-        </div>
-      )}
-
-      <div className="space-y-1">
-        <Label className="text-xs">
-          Input mode
-        </Label>
-
-        <Select
-          value={mode}
-          onValueChange={
-            setMode
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-
-          <SelectContent>
-            {SOURCE_INPUT_MODES.map(
-              (
-                item,
-              ) => (
-                <SelectItem
-                  key={
-                    item.value
-                  }
-                  value={
-                    item.value
-                  }
-                >
-                  {
-                    item.label
-                  }
-                </SelectItem>
-              ),
-            )}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1">
-        <Label className="text-xs">
-          Stage
-        </Label>
-
-        <Select
-          value={
-            stage
-          }
-          onValueChange={
-            setStage
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-
-          <SelectContent>
-            <SelectItem value="pre_conversion">
-              Before conversion
-            </SelectItem>
-
-            <SelectItem value="post_conversion">
-              After conversion
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1">
-        <Label className="text-xs">
-          Weight %
-        </Label>
-
-        <Input
-          inputMode="decimal"
-          value={
-            weight
-          }
-          onChange={(
-            event,
-          ) =>
-            setWeight(
-              event.target.value,
             )
           }
-        />
-      </div>
+        >
+          <Save className="h-4 w-4" />
+          Save all values
+        </Button>
 
-      <Button
-        onClick={() => {
-          const finalName =
-            name.trim() ||
-            rounds.find(
-              (round) =>
-                round.id ===
-                roundId,
-            )?.name ||
-            SOURCE_TYPES.find(
-              (item) =>
-                item.value ===
-                type,
-            )?.label ||
-            "Source";
-
-          if (
-            type ===
-              "round" &&
-            !roundId
-          ) {
-            toast.error(
-              "Select a voting round",
-            );
-            return;
+        <Button
+          variant="ghost"
+          onClick={() =>
+            setValues(
+              Object.fromEntries(
+                participants.map(
+                  (entryKey) => [
+                    entryKey,
+                    "0",
+                  ],
+                ),
+              ),
+            )
           }
-
-          onAdd({
-            sourceType:
-              type,
-            inputMode:
-              mode,
-            sourceRoundId:
-              type ===
-              "round"
-                ? roundId
-                : null,
-            sourceName:
-              finalName,
-            stage,
-            percentageWeight:
-              Number(
-                weight,
-              ) || 0,
-          });
-
-          setName("");
-          setRoundId("");
-        }}
-      >
-        <Plus className="h-4 w-4" />
-        Add source
-      </Button>
+          disabled={locked}
+        >
+          Clear inputs
+        </Button>
+      </div>
     </div>
   );
 }
 
-function ManualEntryDialog({
-  open,
-  onOpenChange,
-  entries,
-  onSave,
+function AddSourcePanel({
+  rounds,
+  disabled,
+  onAdd,
 }: {
-  open: boolean;
-  onOpenChange: (
-    open: boolean,
-  ) => void;
-  entries: ResolvedEntry[];
-  onSave: (
-    payload: any,
-  ) => void;
+  rounds: any[];
+  disabled: boolean;
+  onAdd: (patch: any) => void;
 }) {
-  const [
-    entryKey,
-    setEntryKey,
-  ] = useState("");
+  const [type, setType] =
+    useState<SourceKind>("round");
+  const [name, setName] = useState("");
+  const [weight, setWeight] = useState("0");
+  const [roundId, setRoundId] = useState("");
 
-  const [
-    value,
-    setValue,
-  ] = useState("");
+  const typeInfo = SOURCE_TYPES.find(
+    (item) => item.value === type,
+  )!;
 
-  const [
-    entryType,
-    setEntryType,
-  ] = useState(
-    "external_televote",
-  );
+  const defaultInputMode =
+    type === "activity"
+      ? "activity_points"
+      : type === "correction"
+        ? "correction"
+        : "raw_results";
 
-  const [
-    reason,
-    setReason,
-  ] = useState("");
-
-  const negative =
-    Number(value) < 0;
-
-  const [
-    confirmNegative,
-    setConfirmNegative,
-  ] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-
-    setEntryKey("");
-    setValue("");
-    setReason("");
-    setConfirmNegative(
-      false,
-    );
-  }, [open]);
+  const defaultStage =
+    type === "activity" ||
+    type === "correction"
+      ? "post_conversion"
+      : "pre_conversion";
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={
-        onOpenChange
-      }
+    <Panel
+      title="Add source"
+      subtitle="Website rounds are automatic. External, Instagram and activity sources get one bulk editor after they are added."
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            Add or update a value
-          </DialogTitle>
+      <div className="grid gap-3 lg:grid-cols-[180px_minmax(220px,1fr)_110px_minmax(220px,1fr)_auto]">
+        <Field label="Type">
+          <select
+            value={type}
+            onChange={(event) => {
+              const next =
+                event.target.value as SourceKind;
 
-          <DialogDescription>
-            Values are attached to
-            the participant's
-            stable entry_key. The
-            display name is only
-            presentation metadata.
-          </DialogDescription>
-        </DialogHeader>
+              setType(next);
 
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label>
-              Entry
-            </Label>
-
-            <Select
-              value={
-                entryKey
+              if (next === "round") {
+                setName("");
               }
-              onValueChange={
-                setEntryKey
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select entry" />
-              </SelectTrigger>
-
-              <SelectContent>
-                {entries.map(
-                  (
-                    entry,
-                  ) => (
-                    <SelectItem
-                      key={
-                        entry.entry_key
-                      }
-                      value={
-                        entry.entry_key
-                      }
-                    >
-                      {getEntryDisplayName(
-                        entry,
-                      )}
-                    </SelectItem>
-                  ),
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label>
-              Value
-            </Label>
-
-            <Input
-              value={
-                value
-              }
-              onChange={(
-                event,
-              ) =>
-                setValue(
-                  event.target
-                    .value,
-                )
-              }
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label>
-              Entry type
-            </Label>
-
-            <Select
-              value={
-                entryType
-              }
-              onValueChange={
-                setEntryType
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="external_televote">
-                  External televote
-                </SelectItem>
-
-                <SelectItem value="instagram">
-                  Instagram result
-                </SelectItem>
-
-                <SelectItem value="activity">
-                  Activity bonus
-                </SelectItem>
-
-                <SelectItem value="correction">
-                  Correction
-                </SelectItem>
-
-                <SelectItem value="other">
-                  Other
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label>
-              Reason / note
-            </Label>
-
-            <Textarea
-              value={
-                reason
-              }
-              onChange={(
-                event,
-              ) =>
-                setReason(
-                  event.target
-                    .value,
-                )
-              }
-            />
-          </div>
-
-          {negative ? (
-            <label className="flex items-start gap-2 rounded-2xl border border-amber-400/30 p-3 text-xs text-amber-200">
-              <Checkbox
-                checked={
-                  confirmNegative
-                }
-                onCheckedChange={(
-                  checked,
-                ) =>
-                  setConfirmNegative(
-                    Boolean(
-                      checked,
-                    ),
-                  )
-                }
-              />
-
-              This is a negative
-              adjustment. Confirm
-              that you intend to
-              subtract points.
-            </label>
-          ) : null}
-        </div>
-
-        <DialogFooter>
-          <Button
-            onClick={() => {
-              onSave({
-                entryKey,
-                value:
-                  Number(
-                    value,
-                  ),
-                entryType,
-                reason,
-                confirmNegative,
-              });
-
-              onOpenChange(
-                false,
-              );
             }}
-            disabled={
-              !entryKey ||
-              !reason.trim() ||
-              (negative &&
-                !confirmNegative)
-            }
+            className="min-h-11 w-full rounded-xl border border-border bg-background/30 px-3 text-sm"
           >
-            Save value
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {SOURCE_TYPES.map((item) => (
+              <option
+                key={item.value}
+                value={item.value}
+              >
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Name">
+          <Input
+            value={name}
+            placeholder={
+              type === "external_televote"
+                ? "External televote"
+                : type === "instagram"
+                  ? "Instagram Stories"
+                  : "Source name"
+            }
+            onChange={(event) =>
+              setName(event.target.value)
+            }
+          />
+        </Field>
+
+        <Field label="Weight %">
+          <Input
+            value={weight}
+            inputMode="decimal"
+            onChange={(event) =>
+              setWeight(event.target.value)
+            }
+          />
+        </Field>
+
+        {type === "round" ? (
+          <Field label="Website round">
+            <select
+              value={roundId}
+              onChange={(event) => {
+                const next = event.target.value;
+                setRoundId(next);
+
+                const round = rounds.find(
+                  (item) => item.id === next,
+                );
+
+                if (round && !name.trim()) {
+                  setName(round.name);
+                }
+              }}
+              className="min-h-11 w-full rounded-xl border border-border bg-background/30 px-3 text-sm"
+            >
+              <option value="">
+                Select round
+              </option>
+
+              {rounds.map((round) => (
+                <option
+                  key={round.id}
+                  value={round.id}
+                >
+                  {round.edition_name
+                    ? `${round.edition_name} · `
+                    : ""}
+                  {round.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <div className="self-end text-xs text-muted-foreground">
+            {typeInfo.hint}
+          </div>
+        )}
+
+        <Button
+          className="self-end"
+          disabled={
+            disabled ||
+            !name.trim() ||
+            !Number.isFinite(
+              Number(weight),
+            ) ||
+            Number(weight) < 0 ||
+            Number(weight) > 100 ||
+            (type === "round" && !roundId)
+          }
+          onClick={() => {
+            onAdd({
+              sourceType: type,
+              sourceName: name.trim(),
+              sourceRoundId:
+                type === "round"
+                  ? roundId
+                  : null,
+              percentageWeight:
+                Number(weight),
+              inputMode:
+                defaultInputMode,
+              stage: defaultStage,
+              enabled: true,
+            });
+
+            setName("");
+            setWeight("0");
+            setRoundId("");
+          }}
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
+function Panel({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="glass-strong rounded-3xl p-4 sm:p-5">
+      <div>
+        <h3 className="font-semibold">
+          {title}
+        </h3>
+
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {subtitle}
+        </p>
+      </div>
+
+      <div className="mt-4">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  tone = "normal",
+}: {
+  label: string;
+  value: string;
+  tone?: "normal" | "ok" | "warn";
+}) {
+  return (
+    <div
+      className={`glass-strong rounded-2xl p-3 ${
+        tone === "warn"
+          ? "ring-1 ring-amber-400/25"
+          : tone === "ok"
+            ? "ring-1 ring-emerald-400/20"
+            : ""
+      }`}
+    >
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
+
+      <p
+        className={`mt-1 text-xl font-semibold ${
+          tone === "warn"
+            ? "text-amber-200"
+            : tone === "ok"
+              ? "text-emerald-200"
+              : ""
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/55 bg-card/20 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-10 shrink-0 rounded-xl px-3 text-sm font-medium ${
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StatusPill({
+  status,
+}: {
+  status: string;
+}) {
+  const tone =
+    status === "published"
+      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+      : status === "locked"
+        ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
+        : "border-border/60 bg-card/20";
+
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-1 text-xs font-medium ${tone}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function Callout({
+  tone,
+  children,
+}: {
+  tone: "warn" | "ok";
+  children: ReactNode;
+}) {
+  const warn = tone === "warn";
+
+  return (
+    <div
+      className={`flex items-start gap-2 rounded-2xl border p-3 text-sm ${
+        warn
+          ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
+          : "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+      }`}
+    >
+      {warn ? (
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      ) : (
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+      )}
+
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function EmptyPanel({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="glass rounded-3xl p-8 text-center text-sm text-muted-foreground">
+      {text}
+    </div>
+  );
+}
+
+function ErrorPanel({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="glass rounded-3xl border border-red-400/30 p-8 text-center">
+      <p className="font-semibold text-red-200">
+        Combined televote could not load
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {text}
+      </p>
+    </div>
   );
 }
