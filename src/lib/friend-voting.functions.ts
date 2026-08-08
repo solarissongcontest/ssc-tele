@@ -135,7 +135,7 @@ export const recalculateFriendVoting = createServerFn({ method: "POST" }).handle
     const { data: roundRows, error: rErr } = await supabaseAdmin
       .from("rounds" as any)
       .select(
-        "id, name, closed_at, created_at, edition_id, editions(name), round_countries(country_code)",
+        "id, name, closed_at, created_at, edition_id, editions(name), round_entries(entry_key)",
       )
       .order("created_at", { ascending: true });
     if (rErr) throw new Error(rErr.message);
@@ -165,7 +165,10 @@ export const recalculateFriendVoting = createServerFn({ method: "POST" }).handle
       editionId: r.edition_id,
       editionName: r.editions?.name ?? "Unknown edition",
       name: r.name,
-      participants: (r.round_countries ?? []).map((c: any) => c.country_code),
+      // Targets are generic round entries identified by stable entry_key.
+      // Country entries remain backward compatible because entry_key === country code.
+      // vote_submissions.country_code remains the permanent voter/delegation identity.
+      participants: (r.round_entries ?? []).map((e: any) => e.entry_key),
       maxScore: maxByRound.get(r.id) ?? 10,
       closedAt: r.closed_at,
     }));
