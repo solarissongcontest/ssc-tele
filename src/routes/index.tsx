@@ -67,12 +67,6 @@ function PublicHome() {
     queryKey: ["public-open-round"],
 
     queryFn: async (): Promise<OpenRound | null> => {
-      /*
-       * ----------------------------------------------------------
-       * 1. Find the currently open round
-       * ----------------------------------------------------------
-       */
-
       const { data: roundRow, error: roundError } = await supabase
         .from("rounds")
         .select(
@@ -94,17 +88,6 @@ function PublicHome() {
       if (!roundRow) {
         return null;
       }
-
-      /*
-       * ----------------------------------------------------------
-       * 2. Load generic round entries
-       *
-       * Do NOT load round_countries here anymore.
-       *
-       * round_entries is now the authoritative participant model.
-       * Country entries and custom entries both live here.
-       * ----------------------------------------------------------
-       */
 
       const { data: entryRows, error: entriesError } = await supabase
         .from("round_entries" as any)
@@ -132,12 +115,6 @@ function PublicHome() {
       if (entriesError) {
         throw entriesError;
       }
-
-      /*
-       * ----------------------------------------------------------
-       * 3. Load country metadata only for country entries
-       * ----------------------------------------------------------
-       */
 
       const countryCodes = Array.from(
         new Set(
@@ -169,12 +146,6 @@ function PublicHome() {
         }
       }
 
-      /*
-       * ----------------------------------------------------------
-       * 4. Resolve database rows into generic participant objects
-       * ----------------------------------------------------------
-       */
-
       const entries: ResolvedEntry[] = (entryRows ?? []).map((entry: any) =>
         resolveEntry(
           {
@@ -197,46 +168,26 @@ function PublicHome() {
 
       return {
         id: roundRow.id,
-
         name: roundRow.name,
-
         edition: (roundRow as any).editions ?? null,
-
         participantMode:
           ((roundRow as any).participant_mode as
             | "countries"
             | "custom"
             | "mixed") ?? "countries",
-
         selfVotingMode:
           ((roundRow as any).self_voting_mode as
             | "country_match"
             | "linked_identity"
             | "disabled"
             | "unrestricted") ?? "country_match",
-
         entries,
       };
     },
 
     refetchOnWindowFocus: true,
-
     refetchInterval: 15_000,
   });
-
-  /*
-   * ------------------------------------------------------------
-   * REALTIME
-   *
-   * Refresh the public voting page immediately when:
-   *
-   * - round status changes
-   * - round entry list changes
-   *
-   * Keep listening to round_countries temporarily as a compatibility
-   * bridge while old admin screens may still touch that table.
-   * ------------------------------------------------------------
-   */
 
   useEffect(() => {
     const invalidateOpenRound = () => {
@@ -280,12 +231,6 @@ function PublicHome() {
       void supabase.removeChannel(channel);
     };
   }, [queryClient]);
-
-  /*
-   * ------------------------------------------------------------
-   * PAGE
-   * ------------------------------------------------------------
-   */
 
   return (
     <PublicShell>
