@@ -2,18 +2,27 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+
+import { EntryAvatar } from "@/components/entry-avatar";
 import { PublicShell } from "@/components/public-shell";
-import { CountryFlag, countryName } from "@/components/country-flag";
-import { useAllCountries } from "@/hooks/use-round-results";
 import {
-  listPublishedCombined,
+  entryMap,
+  entryNoun,
+  getEntryDisplayName,
+  type ResolvedEntry,
+} from "@/lib/round-entries";
+import {
   getPublishedCombined,
+  listPublishedCombined,
 } from "@/lib/combined.functions";
 
 export const Route = createFileRoute("/combined")({
   head: () => ({
     meta: [
-      { title: "Combined Televote Result — Solaris Song Contest" },
+      {
+        title:
+          "Combined Televote Result — Solaris Song Contest",
+      },
       {
         name: "description",
         content:
@@ -21,46 +30,102 @@ export const Route = createFileRoute("/combined")({
       },
       {
         property: "og:title",
-        content: "Combined Televote Result — Solaris Song Contest",
+        content:
+          "Combined Televote Result — Solaris Song Contest",
       },
       {
         property: "og:description",
         content:
           "Converted televote points, bonus points and final televote scores for the Solaris Song Contest.",
       },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      {
+        property: "og:type",
+        content: "website",
+      },
+      {
+        name: "twitter:card",
+        content: "summary_large_image",
+      },
     ],
   }),
   component: CombinedResultsPage,
 });
 
 function CombinedResultsPage() {
-  const listFn = useServerFn(listPublishedCombined);
-  const getFn = useServerFn(getPublishedCombined);
-  const { data: countries } = useAllCountries();
-  const [id, setId] = useState<string | undefined>(undefined);
+  const listFn =
+    useServerFn(
+      listPublishedCombined,
+    );
+
+  const getFn =
+    useServerFn(
+      getPublishedCombined,
+    );
+
+  const [id, setId] =
+    useState<string | undefined>(
+      undefined,
+    );
 
   const list = useQuery({
-    queryKey: ["public-combined-list"],
-    queryFn: async () => await listFn(),
+    queryKey: [
+      "public-combined-list",
+    ],
+    queryFn: async () =>
+      await listFn(),
     refetchInterval: 20_000,
   });
+
+  const effectiveId =
+    id ??
+    list.data?.[0]?.id ??
+    undefined;
+
   const data = useQuery({
-    queryKey: ["public-combined", id],
-    queryFn: async () => await getFn({ data: { id } }),
+    queryKey: [
+      "public-combined",
+      effectiveId,
+    ],
+    queryFn: async () =>
+      await getFn({
+        data: {
+          id: effectiveId,
+        },
+      }),
+    enabled:
+      Boolean(
+        effectiveId,
+      ),
     refetchInterval: 15_000,
   });
 
-  const byCode = useMemo(() => {
-    const m = new Map<string, any>();
-    (countries ?? []).forEach((c) => m.set(c.code, c));
-    return m;
-  }, [countries]);
+  const aggregation =
+    data.data?.aggregation ??
+    null;
 
-  const agg = data.data?.aggregation ?? null;
-  const rows = data.data?.rows ?? [];
-  const cols = agg?.columns;
+  const rows =
+    data.data?.rows ?? [];
+
+  const entryCatalog =
+    (data.data?.entryCatalog ??
+      []) as ResolvedEntry[];
+
+  const byEntryKey =
+    useMemo(
+      () => entryMap(
+        entryCatalog,
+      ),
+      [entryCatalog],
+    );
+
+  const participantLabel =
+    entryNoun(
+      entryCatalog,
+      false,
+    );
+
+  const columns =
+    aggregation?.columns;
 
   return (
     <PublicShell>
@@ -69,101 +134,211 @@ function CombinedResultsPage() {
           <p className="text-xs uppercase tracking-[0.3em] text-primary">
             Official result
           </p>
+
           <h1 className="text-2xl font-semibold">
-            {agg ? agg.name : "Combined televote"}
+            {aggregation
+              ? aggregation.name
+              : "Combined televote"}
           </h1>
-          {agg && (
+
+          {aggregation ? (
             <p className="text-xs text-muted-foreground">
-              {agg.edition ? agg.edition + " · " : ""}
-              {agg.total_points} televote points distributed · v{agg.version}
+              {aggregation.edition
+                ? `${aggregation.edition} · `
+                : ""}
+              {
+                aggregation.total_points
+              }{" "}
+              televote points
+              distributed · v
+              {
+                aggregation.version
+              }
             </p>
-          )}
+          ) : null}
         </header>
 
-        {(list.data ?? []).length > 1 && (
+        {(list.data ?? [])
+          .length > 1 ? (
           <div className="flex flex-wrap justify-center gap-2">
-            {(list.data ?? []).map((a: any) => (
-              <button
-                key={a.id}
-                onClick={() => setId(a.id)}
-                className={`rounded-full border px-4 py-2 text-xs ${
-                  (id ?? (list.data ?? [])[0]?.id) === a.id
-                    ? "border-primary/60 text-foreground"
-                    : "border-white/10 text-muted-foreground"
-                }`}
-              >
-                {a.name}
-              </button>
-            ))}
+            {(list.data ?? []).map(
+              (item: any) => (
+                <button
+                  key={
+                    item.id
+                  }
+                  onClick={() =>
+                    setId(
+                      item.id,
+                    )
+                  }
+                  className={`rounded-full border px-4 py-2 text-xs ${
+                    effectiveId ===
+                    item.id
+                      ? "border-primary/60 text-foreground"
+                      : "border-white/10 text-muted-foreground"
+                  }`}
+                >
+                  {item.name}
+                </button>
+              ),
+            )}
           </div>
-        )}
+        ) : null}
 
-        {!agg && !data.isLoading && (
+        {!aggregation &&
+        !data.isLoading &&
+        !list.isLoading ? (
           <div className="glass rounded-3xl p-8 text-center">
             <p className="text-sm text-muted-foreground">
-              No combined result has been published yet. Check back after the show.
+              No combined result
+              has been published
+              yet. Check back after
+              the show.
             </p>
           </div>
-        )}
+        ) : null}
 
-        {agg && (
-          <div className="glass rounded-3xl p-4 overflow-x-auto">
+        {aggregation ? (
+          <div className="glass overflow-x-auto rounded-3xl p-4">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="py-2 pr-3">#</th>
-                  <th className="py-2 pr-3">Country</th>
-                  {cols?.combined_original && (
-                    <th className="py-2 pr-3 text-right">Combined original</th>
-                  )}
-                  {cols?.converted && (
-                    <th className="py-2 pr-3 text-right">Televote points</th>
-                  )}
-                  {cols?.bonus && <th className="py-2 pr-3 text-right">Bonus</th>}
-                  {cols?.final && <th className="py-2 pr-3 text-right">Final</th>}
+                  <th className="py-2 pr-3">
+                    #
+                  </th>
+
+                  <th className="py-2 pr-3">
+                    {
+                      participantLabel
+                    }
+                  </th>
+
+                  {columns?.combined_original ? (
+                    <th className="py-2 pr-3 text-right">
+                      Combined original
+                    </th>
+                  ) : null}
+
+                  {columns?.converted ? (
+                    <th className="py-2 pr-3 text-right">
+                      Televote points
+                    </th>
+                  ) : null}
+
+                  {columns?.bonus ? (
+                    <th className="py-2 pr-3 text-right">
+                      Bonus
+                    </th>
+                  ) : null}
+
+                  {columns?.final ? (
+                    <th className="py-2 pr-3 text-right">
+                      Final
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
+
               <tbody>
-                {rows.map((r: any, i: number) => {
-                  const c = byCode.get(r.country_code);
-                  return (
-                    <tr key={r.country_code} className="border-t border-white/5">
-                      <td className="py-2 pr-3 tabular-nums">{i + 1}</td>
-                      <td className="py-2 pr-3">
-                        <span className="flex items-center gap-2">
-                          <CountryFlag country={c} size={20} />
-                          {countryName(c) || r.country_code}
-                        </span>
-                      </td>
-                      {cols?.combined_original && (
-                        <td className="py-2 pr-3 text-right tabular-nums">
-                          {Number(r.combined_original_score).toLocaleString(undefined, {
-                            maximumFractionDigits: 3,
-                          })}
+                {rows.map(
+                  (
+                    row: any,
+                    index: number,
+                  ) => {
+                    const entryKey =
+                      row.entry_key ??
+                      row.country_code;
+
+                    const entry =
+                      byEntryKey.get(
+                        entryKey,
+                      );
+
+                    const label =
+                      entry
+                        ? getEntryDisplayName(
+                            entry,
+                          )
+                        : entryKey;
+
+                    return (
+                      <tr
+                        key={
+                          entryKey
+                        }
+                        className="border-t border-white/5"
+                      >
+                        <td className="py-2 pr-3 tabular-nums">
+                          {
+                            index +
+                            1
+                          }
                         </td>
-                      )}
-                      {cols?.converted && (
-                        <td className="py-2 pr-3 text-right tabular-nums">
-                          {r.converted_points}
+
+                        <td className="py-2 pr-3">
+                          <span className="flex items-center gap-2">
+                            <EntryAvatar
+                              entry={
+                                entry
+                              }
+                              size={
+                                20
+                              }
+                            />
+
+                            <span>
+                              {
+                                label
+                              }
+                            </span>
+                          </span>
                         </td>
-                      )}
-                      {cols?.bonus && (
-                        <td className="py-2 pr-3 text-right tabular-nums">
-                          {Number(r.bonus_points)}
-                        </td>
-                      )}
-                      {cols?.final && (
-                        <td className="py-2 pr-3 text-right text-base font-semibold tabular-nums">
-                          {Number(r.final_televote_score)}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
+
+                        {columns?.combined_original ? (
+                          <td className="py-2 pr-3 text-right tabular-nums">
+                            {Number(
+                              row.combined_original_score,
+                            ).toLocaleString(
+                              undefined,
+                              {
+                                maximumFractionDigits: 3,
+                              },
+                            )}
+                          </td>
+                        ) : null}
+
+                        {columns?.converted ? (
+                          <td className="py-2 pr-3 text-right tabular-nums">
+                            {
+                              row.converted_points
+                            }
+                          </td>
+                        ) : null}
+
+                        {columns?.bonus ? (
+                          <td className="py-2 pr-3 text-right tabular-nums">
+                            {Number(
+                              row.bonus_points,
+                            )}
+                          </td>
+                        ) : null}
+
+                        {columns?.final ? (
+                          <td className="py-2 pr-3 text-right text-base font-semibold tabular-nums">
+                            {Number(
+                              row.final_televote_score,
+                            )}
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  },
+                )}
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
       </div>
     </PublicShell>
   );
