@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -17,17 +16,13 @@ import {
  * Custom entries are resolved only by entry_key, never by display name.
  */
 export function useEntryKeyCatalog(entryKeys: string[]) {
-  const stableKeys = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          entryKeys
-            .map((key) => String(key ?? "").trim())
-            .filter(Boolean),
-        ),
-      ).sort(),
-    [entryKeys.join("|")],
-  );
+  const stableKeys = Array.from(
+    new Set(
+      entryKeys
+        .map((key) => String(key ?? "").trim())
+        .filter(Boolean),
+    ),
+  ).sort();
 
   return useQuery({
     queryKey: ["entry-key-catalog", stableKeys],
@@ -59,6 +54,7 @@ export function useEntryKeyCatalog(entryKeys: string[]) {
       );
 
       const unique = new Map<string, RoundEntry>();
+
       for (const entry of raw) {
         if (!unique.has(entry.entry_key)) {
           unique.set(entry.entry_key, entry);
