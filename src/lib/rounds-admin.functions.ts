@@ -6,7 +6,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { useSession } from "@tanstack/react-start/server";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 type SessionData = { token?: string };
 const SESSION_COOKIE_NAME = "solaris-admin";
@@ -527,5 +527,538 @@ export const saveRoundCountries = createServerFn({ method: "POST" })
       count: after.length,
       countryCount: countryRows.length,
       customCount: existingCustomEntries.length,
+    };
+  });
+
+
+// ================== Generic round entries ==================
+
+type ParticipantMode = "countries" | "custom" | "mixed";
+
+function cleanOptionalText(
+  value: unknown,
+  maxLength: number,
+): string | null {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  if (text.length > maxLength) {
+    throw new Error(`Value is too long (maximum ${maxLength} characters)`);
+  }
+  return text;
+}
+
+function cleanImageUrl(value: unknown): string | null {
+  const text = cleanOptionalText(value, 1000);
+  if (!text) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(text);
+  } catch {
+    throw new Error("Image URL must be a valid URL");
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Image URL must use http or https");
+  }
+
+  return parsed.toString();
+}
+
+export const setRoundParticipantMode = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      roundId: string;
+      participantMode: ParticipantMode;
+    }) => {
+      if (!data?.roundId) throw new Error("Missing round");
+
+      if (
+        !["countries", "custom", "mixed"].includes(
+          data.participantMode,
+        )
+      ) {
+        throw new Error("Invalid participant mode");
+      }
+
+      return data;
+    },
+  )
+  .handler(async ({ data }) => {
+    const actor = await requireAdmin();
+
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const { data: round, error: roundError } = await supabaseAdmin
+      .from("rounds" as any)
+      .select("id,status,participant_mode")
+      .eq("id", data.roundId)
+      .maybeSingle();
+
+    if (roundError) throw new Error(roundError.message);
+    if (!round) throw new Error("Round not found");
+
+    if ((round as any).status === "open") {
+      throw new Error("Close the round before changing its participant mode");
+    }
+
+    const { data: before, error: beforeError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select(
+        "id,entry_type,entry_key,country_code,custom_name,short_name,entry_code,subtitle,image_url,description,display_order",
+      )
+      .eq("round_id", data.roundId)
+      .order("display_order");
+
+    if (beforeError) throw new Error(beforeError.message);
+
+    if (data.participantMode === "countries") {
+      const { error } = await supabaseAdmin
+        .from("round_entries" as any)
+        .delete()
+        .eq("round_id", data.roundId)
+        .eq("entry_type", "custom");
+
+      if (error) throw new Error(error.message);
+    }
+
+    if (data.participantMode === "custom") {
+      const { error } = await supabaseAdmin
+        .from("round_entries" as any)
+        .delete()
+        .eq("round_id", data.roundId)
+        .eq("entry_type", "country");
+
+      if (error) throw new Error(error.message);
+    }
+
+    const { data: remaining, error: remainingError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select("id")
+      .eq("round_id", data.roundId)
+      .order("display_order");
+
+    if (remainingError) throw new Error(remainingError.message);
+
+    for (let index = 0; index < (remaining ?? []).length; index += 1) {
+      const row = (remaining ?? [])[index] as any;
+
+      const { error } = await supabaseAdmin
+        .from("round_entries" as any)
+        .update({ display_order: index + 1 })
+        .eq("id", row.id);
+
+      if (error) throw new Error(error.message);
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from("rounds" as any)
+      .update({
+        participant_mode: data.participantMode,
+      })
+      .eq("id", data.roundId);
+
+    if (updateError) throw new Error(updateError.message);
+
+    const { data: after } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select(
+        "id,entry_type,entry_key,country_code,custom_name,short_name,entry_code,subtitle,image_url,description,display_order",
+      )
+      .eq("round_id", data.roundId)
+      .order("display_order");
+
+    await audit(actor, "set_round_participant_mode", {
+      target_type: "round",
+      target_id: data.roundId,
+      old_values: {
+        participant_mode: (round as any).participant_mode,
+        entries: before,
+      },
+      new_values: {
+        participant_mode: data.participantMode,
+        entries: after,
+      },
+    });
+
+    return {
+      ok: true,
+      participantMode: data.participantMode,
+    };
+  });
+
+export const saveCustomRoundEntry = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      roundId: string;
+      id?: string | null;
+      customName: string;
+      shortName?: string | null;
+      entryCode?: string | null;
+      subtitle?: string | null;
+      imageUrl?: string | null;
+      description?: string | null;
+    }) => {
+      if (!data?.roundId) throw new Error("Missing round");
+
+      const customName = String(data?.customName ?? "").trim();
+      if (!customName) throw new Error("Display name is required");
+      if (customName.length > 120) {
+        throw new Error("Display name is too long");
+      }
+
+      return {
+        roundId: data.roundId,
+        id: data.id || null,
+        customName,
+        shortName: cleanOptionalText(data.shortName, 60),
+        entryCode: cleanOptionalText(data.entryCode, 24),
+        subtitle: cleanOptionalText(data.subtitle, 120),
+        imageUrl: cleanImageUrl(data.imageUrl),
+        description: cleanOptionalText(data.description, 1000),
+      };
+    },
+  )
+  .handler(async ({ data }) => {
+    const actor = await requireAdmin();
+
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const { data: round, error: roundError } = await supabaseAdmin
+      .from("rounds" as any)
+      .select("id,status,participant_mode")
+      .eq("id", data.roundId)
+      .maybeSingle();
+
+    if (roundError) throw new Error(roundError.message);
+    if (!round) throw new Error("Round not found");
+
+    if ((round as any).status === "open") {
+      throw new Error("Close the round before changing its participants");
+    }
+
+    if (data.id) {
+      const { data: before, error: beforeError } = await supabaseAdmin
+        .from("round_entries" as any)
+        .select("*")
+        .eq("id", data.id)
+        .eq("round_id", data.roundId)
+        .eq("entry_type", "custom")
+        .maybeSingle();
+
+      if (beforeError) throw new Error(beforeError.message);
+      if (!before) throw new Error("Custom entry not found");
+
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from("round_entries" as any)
+        .update({
+          custom_name: data.customName,
+          short_name: data.shortName,
+          entry_code: data.entryCode,
+          subtitle: data.subtitle,
+          image_url: data.imageUrl,
+          description: data.description,
+        })
+        .eq("id", data.id)
+        .eq("round_id", data.roundId)
+        .select("*")
+        .single();
+
+      if (updateError) throw new Error(updateError.message);
+
+      await audit(actor, "update_custom_round_entry", {
+        target_type: "round_entry",
+        target_id: data.id,
+        old_values: before,
+        new_values: updated,
+      });
+
+      return {
+        ok: true,
+        entry: updated,
+      };
+    }
+
+    const { count, error: countError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select("id", { count: "exact", head: true })
+      .eq("round_id", data.roundId);
+
+    if (countError) throw new Error(countError.message);
+
+    if ((count ?? 0) >= 50) {
+      throw new Error("A round can have at most 50 entries");
+    }
+
+    const { data: lastRows, error: lastError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select("display_order")
+      .eq("round_id", data.roundId)
+      .order("display_order", { ascending: false })
+      .limit(1);
+
+    if (lastError) throw new Error(lastError.message);
+
+    const nextOrder =
+      Number((lastRows?.[0] as any)?.display_order ?? 0) + 1;
+
+    const entryKey = `x_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+
+    const { data: inserted, error: insertError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .insert({
+        round_id: data.roundId,
+        entry_type: "custom",
+        entry_key: entryKey,
+        country_code: null,
+        custom_name: data.customName,
+        short_name: data.shortName,
+        entry_code: data.entryCode,
+        subtitle: data.subtitle,
+        image_url: data.imageUrl,
+        description: data.description,
+        display_order: nextOrder,
+      })
+      .select("*")
+      .single();
+
+    if (insertError) throw new Error(insertError.message);
+
+    const { count: countryCount, error: countryCountError } =
+      await supabaseAdmin
+        .from("round_entries" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("round_id", data.roundId)
+        .eq("entry_type", "country");
+
+    if (countryCountError) throw new Error(countryCountError.message);
+
+    const participantMode =
+      (countryCount ?? 0) > 0 ? "mixed" : "custom";
+
+    const { error: modeError } = await supabaseAdmin
+      .from("rounds" as any)
+      .update({
+        participant_mode: participantMode,
+      })
+      .eq("id", data.roundId);
+
+    if (modeError) throw new Error(modeError.message);
+
+    await audit(actor, "create_custom_round_entry", {
+      target_type: "round_entry",
+      target_id: (inserted as any).id,
+      new_values: inserted,
+    });
+
+    return {
+      ok: true,
+      entry: inserted,
+      participantMode,
+    };
+  });
+
+export const deleteCustomRoundEntry = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      roundId: string;
+      entryId: string;
+    }) => {
+      if (!data?.roundId) throw new Error("Missing round");
+      if (!data?.entryId) throw new Error("Missing entry");
+      return data;
+    },
+  )
+  .handler(async ({ data }) => {
+    const actor = await requireAdmin();
+
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const { data: round, error: roundError } = await supabaseAdmin
+      .from("rounds" as any)
+      .select("id,status,participant_mode")
+      .eq("id", data.roundId)
+      .maybeSingle();
+
+    if (roundError) throw new Error(roundError.message);
+    if (!round) throw new Error("Round not found");
+
+    if ((round as any).status === "open") {
+      throw new Error("Close the round before changing its participants");
+    }
+
+    const { data: before, error: beforeError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select("*")
+      .eq("id", data.entryId)
+      .eq("round_id", data.roundId)
+      .eq("entry_type", "custom")
+      .maybeSingle();
+
+    if (beforeError) throw new Error(beforeError.message);
+    if (!before) throw new Error("Custom entry not found");
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .delete()
+      .eq("id", data.entryId)
+      .eq("round_id", data.roundId);
+
+    if (deleteError) throw new Error(deleteError.message);
+
+    const { data: remaining, error: remainingError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select("id,entry_type")
+      .eq("round_id", data.roundId)
+      .order("display_order");
+
+    if (remainingError) throw new Error(remainingError.message);
+
+    for (let index = 0; index < (remaining ?? []).length; index += 1) {
+      const row = (remaining ?? [])[index] as any;
+
+      const { error } = await supabaseAdmin
+        .from("round_entries" as any)
+        .update({
+          display_order: index + 1,
+        })
+        .eq("id", row.id);
+
+      if (error) throw new Error(error.message);
+    }
+
+    const hasCountry = (remaining ?? []).some(
+      (row: any) => row.entry_type === "country",
+    );
+
+    const hasCustom = (remaining ?? []).some(
+      (row: any) => row.entry_type === "custom",
+    );
+
+    let participantMode = (round as any)
+      .participant_mode as ParticipantMode;
+
+    if (hasCountry && hasCustom) participantMode = "mixed";
+    else if (hasCountry) participantMode = "countries";
+    else if (hasCustom) participantMode = "custom";
+
+    const { error: modeError } = await supabaseAdmin
+      .from("rounds" as any)
+      .update({
+        participant_mode: participantMode,
+      })
+      .eq("id", data.roundId);
+
+    if (modeError) throw new Error(modeError.message);
+
+    await audit(actor, "delete_custom_round_entry", {
+      target_type: "round_entry",
+      target_id: data.entryId,
+      old_values: before,
+      new_values: null,
+    });
+
+    return {
+      ok: true,
+      participantMode,
+    };
+  });
+
+export const reorderRoundEntries = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      roundId: string;
+      entryIds: string[];
+    }) => {
+      if (!data?.roundId) throw new Error("Missing round");
+
+      if (!Array.isArray(data?.entryIds)) {
+        throw new Error("Invalid entry order");
+      }
+
+      if (new Set(data.entryIds).size !== data.entryIds.length) {
+        throw new Error("Duplicate entry in order");
+      }
+
+      return data;
+    },
+  )
+  .handler(async ({ data }) => {
+    const actor = await requireAdmin();
+
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const { data: round, error: roundError } = await supabaseAdmin
+      .from("rounds" as any)
+      .select("id,status")
+      .eq("id", data.roundId)
+      .maybeSingle();
+
+    if (roundError) throw new Error(roundError.message);
+    if (!round) throw new Error("Round not found");
+
+    if ((round as any).status === "open") {
+      throw new Error("Close the round before reordering entries");
+    }
+
+    const { data: before, error: beforeError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select("id,entry_key,display_order")
+      .eq("round_id", data.roundId)
+      .order("display_order");
+
+    if (beforeError) throw new Error(beforeError.message);
+
+    const existingIds = ((before ?? []) as any[]).map(
+      (row) => String(row.id),
+    );
+
+    if (existingIds.length !== data.entryIds.length) {
+      throw new Error("Entry list changed. Refresh and try again.");
+    }
+
+    const expected = new Set(existingIds);
+
+    for (const id of data.entryIds) {
+      if (!expected.has(id)) {
+        throw new Error("Entry list changed. Refresh and try again.");
+      }
+    }
+
+    for (let index = 0; index < data.entryIds.length; index += 1) {
+      const { error } = await supabaseAdmin
+        .from("round_entries" as any)
+        .update({
+          display_order: index + 1,
+        })
+        .eq("id", data.entryIds[index])
+        .eq("round_id", data.roundId);
+
+      if (error) throw new Error(error.message);
+    }
+
+    const after = data.entryIds.map((id, index) => ({
+      id,
+      display_order: index + 1,
+    }));
+
+    await audit(actor, "reorder_round_entries", {
+      target_type: "round",
+      target_id: data.roundId,
+      old_values: before,
+      new_values: after,
+    });
+
+    return {
+      ok: true,
+      count: data.entryIds.length,
     };
   });
