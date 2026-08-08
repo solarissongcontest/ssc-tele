@@ -7,7 +7,6 @@ import { EntryAvatar } from "@/components/entry-avatar";
 import { PublicShell } from "@/components/public-shell";
 import {
   entryMap,
-  entryNoun,
   getEntryDisplayName,
   type ResolvedEntry,
 } from "@/lib/round-entries";
@@ -26,25 +25,7 @@ export const Route = createFileRoute("/combined")({
       {
         name: "description",
         content:
-          "Official Solaris combined televote: converted televote points, bonus points and the final televote score across every voting source.",
-      },
-      {
-        property: "og:title",
-        content:
-          "Combined Televote Result — Solaris Song Contest",
-      },
-      {
-        property: "og:description",
-        content:
-          "Converted televote points, bonus points and final televote scores for the Solaris Song Contest.",
-      },
-      {
-        property: "og:type",
-        content: "website",
-      },
-      {
-        name: "twitter:card",
-        content: "summary_large_image",
+          "Official Solaris combined televote result.",
       },
     ],
   }),
@@ -52,24 +33,25 @@ export const Route = createFileRoute("/combined")({
 });
 
 function CombinedResultsPage() {
-  const listFn =
-    useServerFn(
-      listPublishedCombined,
-    );
+  const listFn = useServerFn(
+    listPublishedCombined,
+  );
 
-  const getFn =
-    useServerFn(
-      getPublishedCombined,
-    );
+  const getFn = useServerFn(
+    getPublishedCombined,
+  );
 
   const [id, setId] =
     useState<string | undefined>(
       undefined,
     );
 
+  const [details, setDetails] =
+    useState(false);
+
   const list = useQuery({
     queryKey: [
-      "public-combined-list",
+      "public-combined-list-redesign",
     ],
     queryFn: async () =>
       await listFn(),
@@ -83,7 +65,7 @@ function CombinedResultsPage() {
 
   const data = useQuery({
     queryKey: [
-      "public-combined",
+      "public-combined-redesign",
       effectiveId,
     ],
     queryFn: async () =>
@@ -92,16 +74,12 @@ function CombinedResultsPage() {
           id: effectiveId,
         },
       }),
-    enabled:
-      Boolean(
-        effectiveId,
-      ),
+    enabled: Boolean(effectiveId),
     refetchInterval: 15_000,
   });
 
   const aggregation =
-    data.data?.aggregation ??
-    null;
+    data.data?.aggregation ?? null;
 
   const rows =
     data.data?.rows ?? [];
@@ -112,78 +90,79 @@ function CombinedResultsPage() {
 
   const byEntryKey =
     useMemo(
-      () => entryMap(
-        entryCatalog,
-      ),
+      () => entryMap(entryCatalog),
       [entryCatalog],
-    );
-
-  const participantLabel =
-    entryNoun(
-      entryCatalog,
-      false,
     );
 
   const columns =
     aggregation?.columns;
 
+  const finalTotal = rows.reduce(
+    (sum: number, row: any) =>
+      sum +
+      Number(
+        row.final_televote_score ?? 0,
+      ),
+    0,
+  );
+
   return (
     <PublicShell>
-      <div className="space-y-6">
-        <header className="space-y-2 text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-primary">
-            Official result
+      <div className="space-y-5">
+        <header className="px-1 text-center">
+          <p className="text-[11px] uppercase tracking-[0.32em] text-primary">
+            Official combined result
           </p>
 
-          <h1 className="text-2xl font-semibold">
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
             {aggregation
               ? aggregation.name
               : "Combined televote"}
           </h1>
 
           {aggregation ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-2 text-sm text-muted-foreground">
               {aggregation.edition
                 ? `${aggregation.edition} · `
                 : ""}
               {
                 aggregation.total_points
-              }{" "}
-              televote points
-              distributed · v
-              {
-                aggregation.version
-              }
+              } televote points · v
+              {aggregation.version}
             </p>
           ) : null}
         </header>
 
-        {(list.data ?? [])
-          .length > 1 ? (
-          <div className="flex flex-wrap justify-center gap-2">
-            {(list.data ?? []).map(
-              (item: any) => (
-                <button
-                  key={
-                    item.id
-                  }
-                  onClick={() =>
-                    setId(
-                      item.id,
-                    )
-                  }
-                  className={`rounded-full border px-4 py-2 text-xs ${
-                    effectiveId ===
-                    item.id
-                      ? "border-primary/60 text-foreground"
-                      : "border-white/10 text-muted-foreground"
-                  }`}
-                >
-                  {item.name}
-                </button>
-              ),
-            )}
-          </div>
+        {(list.data ?? []).length >
+        1 ? (
+          <label className="glass block rounded-2xl p-3">
+            <span className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">
+              Published result
+            </span>
+
+            <select
+              value={
+                effectiveId ?? ""
+              }
+              onChange={(event) =>
+                setId(
+                  event.target.value,
+                )
+              }
+              className="min-h-11 w-full rounded-xl border border-border bg-background/30 px-3 text-sm"
+            >
+              {(list.data ?? []).map(
+                (item: any) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                  >
+                    {item.name}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
         ) : null}
 
         {!aggregation &&
@@ -191,155 +170,241 @@ function CombinedResultsPage() {
         !list.isLoading ? (
           <div className="glass rounded-3xl p-8 text-center">
             <p className="text-sm text-muted-foreground">
-              No combined result
-              has been published
-              yet. Check back after
-              the show.
+              No combined result has
+              been published yet.
             </p>
           </div>
         ) : null}
 
         {aggregation ? (
-          <div className="glass overflow-x-auto rounded-3xl p-4">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="py-2 pr-3">
-                    #
-                  </th>
+          <>
+            <section className="grid grid-cols-3 gap-2">
+              <Stat
+                label="Entries"
+                value={String(
+                  rows.length,
+                )}
+              />
 
-                  <th className="py-2 pr-3">
-                    {
-                      participantLabel
-                    }
-                  </th>
+              <Stat
+                label="Pool"
+                value={String(
+                  aggregation.total_points,
+                )}
+              />
 
-                  {columns?.combined_original ? (
-                    <th className="py-2 pr-3 text-right">
-                      Combined original
-                    </th>
-                  ) : null}
+              <Stat
+                label="Final total"
+                value={String(
+                  finalTotal,
+                )}
+              />
+            </section>
 
-                  {columns?.converted ? (
-                    <th className="py-2 pr-3 text-right">
-                      Televote points
-                    </th>
-                  ) : null}
+            <div className="glass flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5">
+              <div>
+                <p className="text-sm font-medium">
+                  Score detail
+                </p>
 
-                  {columns?.bonus ? (
-                    <th className="py-2 pr-3 text-right">
-                      Bonus
-                    </th>
-                  ) : null}
+                <p className="text-xs text-muted-foreground">
+                  Show the component
+                  columns beneath each
+                  entry.
+                </p>
+              </div>
 
-                  {columns?.final ? (
-                    <th className="py-2 pr-3 text-right">
-                      Final
-                    </th>
-                  ) : null}
-                </tr>
-              </thead>
+              <button
+                type="button"
+                onClick={() =>
+                  setDetails(
+                    (value) =>
+                      !value,
+                  )
+                }
+                className={`min-h-9 rounded-full border px-3 text-xs font-medium ${
+                  details
+                    ? "border-primary/35 bg-primary/10 text-primary"
+                    : "border-border/60 text-muted-foreground"
+                }`}
+              >
+                {details
+                  ? "Hide"
+                  : "Show"}
+              </button>
+            </div>
 
-              <tbody>
-                {rows.map(
-                  (
-                    row: any,
-                    index: number,
-                  ) => {
-                    const entryKey =
-                      row.entry_key ??
-                      row.country_code;
+            <section className="space-y-2">
+              {rows.map(
+                (
+                  row: any,
+                  index: number,
+                ) => {
+                  const entryKey =
+                    row.entry_key ??
+                    row.country_code;
 
-                    const entry =
-                      byEntryKey.get(
-                        entryKey,
-                      );
+                  const entry =
+                    byEntryKey.get(
+                      entryKey,
+                    );
 
-                    const label =
-                      entry
-                        ? getEntryDisplayName(
-                            entry,
-                          )
-                        : entryKey;
+                  const label =
+                    entry
+                      ? getEntryDisplayName(
+                          entry,
+                        )
+                      : entryKey;
 
-                    return (
-                      <tr
-                        key={
-                          entryKey
-                        }
-                        className="border-t border-white/5"
-                      >
-                        <td className="py-2 pr-3 tabular-nums">
-                          {
-                            index +
-                            1
-                          }
-                        </td>
+                  return (
+                    <div
+                      key={entryKey}
+                      className={`glass-strong rounded-3xl p-3 sm:p-4 ${
+                        index === 0
+                          ? "ring-1 ring-primary/30"
+                          : ""
+                      }`}
+                    >
+                      <div className="grid grid-cols-[34px_minmax(0,1fr)_88px] items-center gap-3">
+                        <div
+                          className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold tabular-nums ${
+                            index === 0
+                              ? "bg-primary/20 text-primary"
+                              : "bg-white/[0.05] text-muted-foreground"
+                          }`}
+                        >
+                          {index + 1}
+                        </div>
 
-                        <td className="py-2 pr-3">
-                          <span className="flex items-center gap-2">
-                            <EntryAvatar
-                              entry={
-                                entry
-                              }
-                              size={
-                                20
-                              }
-                            />
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <EntryAvatar
+                            entry={entry}
+                            size={26}
+                          />
 
-                            <span>
-                              {
-                                label
-                              }
-                            </span>
-                          </span>
-                        </td>
+                          <p className="truncate font-medium">
+                            {label}
+                          </p>
+                        </div>
 
-                        {columns?.combined_original ? (
-                          <td className="py-2 pr-3 text-right tabular-nums">
-                            {Number(
-                              row.combined_original_score,
-                            ).toLocaleString(
-                              undefined,
-                              {
-                                maximumFractionDigits: 3,
-                              },
-                            )}
-                          </td>
-                        ) : null}
-
-                        {columns?.converted ? (
-                          <td className="py-2 pr-3 text-right tabular-nums">
-                            {
-                              row.converted_points
-                            }
-                          </td>
-                        ) : null}
-
-                        {columns?.bonus ? (
-                          <td className="py-2 pr-3 text-right tabular-nums">
-                            {Number(
-                              row.bonus_points,
-                            )}
-                          </td>
-                        ) : null}
-
-                        {columns?.final ? (
-                          <td className="py-2 pr-3 text-right text-base font-semibold tabular-nums">
+                        <div className="text-right">
+                          <p className="text-xl font-semibold tabular-nums">
                             {Number(
                               row.final_televote_score,
                             )}
-                          </td>
-                        ) : null}
-                      </tr>
-                    );
-                  },
-                )}
-              </tbody>
-            </table>
-          </div>
+                          </p>
+
+                          <p className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            final
+                          </p>
+                        </div>
+                      </div>
+
+                      {details ? (
+                        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/5 pt-3 sm:grid-cols-4">
+                          {columns?.combined_original ? (
+                            <MiniScore
+                              label="Original"
+                              value={Number(
+                                row.combined_original_score,
+                              ).toLocaleString(
+                                undefined,
+                                {
+                                  maximumFractionDigits: 3,
+                                },
+                              )}
+                            />
+                          ) : null}
+
+                          {columns?.converted ? (
+                            <MiniScore
+                              label="Televote"
+                              value={String(
+                                row.converted_points,
+                              )}
+                            />
+                          ) : null}
+
+                          {columns?.bonus ? (
+                            <MiniScore
+                              label="Bonus"
+                              value={String(
+                                Number(
+                                  row.bonus_points,
+                                ),
+                              )}
+                            />
+                          ) : null}
+
+                          {columns?.final ? (
+                            <MiniScore
+                              label="Final"
+                              value={String(
+                                Number(
+                                  row.final_televote_score,
+                                ),
+                              )}
+                              strong
+                            />
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                },
+              )}
+            </section>
+          </>
         ) : null}
       </div>
     </PublicShell>
+  );
+}
+
+function Stat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="glass-strong rounded-2xl p-3 text-center">
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+
+      <p className="mt-1 text-lg font-semibold tabular-nums">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function MiniScore({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/5 bg-black/10 px-3 py-2">
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+
+      <p
+        className={`mt-0.5 tabular-nums ${
+          strong
+            ? "text-base font-semibold"
+            : "text-sm font-medium"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
   );
 }
