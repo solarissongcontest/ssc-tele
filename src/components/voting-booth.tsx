@@ -1,8 +1,21 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Minus, Plus, Vote, Sparkles, CheckCircle2, AlertTriangle, Search, RotateCcw, Share2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Minus,
+  Plus,
+  RotateCcw,
+  Search,
+  Share2,
+  Sparkles,
+  Vote,
+} from "lucide-react";
 import { toast } from "sonner";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,16 +25,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { CountryFlag, countryName } from "@/components/country-flag";
+import { EntryAvatar } from "@/components/entry-avatar";
+
 import { supabase } from "@/integrations/supabase/client";
 import {
   buildClientIdentity,
   hasSubmittedRound,
   markRoundSubmitted,
 } from "@/lib/anti-abuse";
+import {
+  entryMap,
+  entryNoun,
+  getEntryCode,
+  getEntryDisplayName,
+  sortEntries,
+  type ResolvedEntry,
+  type SelfVotingMode,
+} from "@/lib/round-entries";
 import { submitVote } from "@/lib/vote.functions";
-import { CountryFlag, countryName } from "@/components/country-flag";
+import { cn } from "@/lib/utils";
 
 type CountryShape = {
   code: string;
@@ -30,257 +53,482 @@ type CountryShape = {
   flag_url: string | null;
 };
 
-export type RoundCountry = {
-  display_order: number;
-  country: CountryShape;
-};
-
 type Stage = "register" | "vote" | "done";
+
+type Confirmation = {
+  username: string;
+  home: string;
+  breakdown: {
+    entryKey: string;
+    points: number;
+  }[];
+};
 
 const TOTAL = 20;
 const MAX_PER = 10;
-const MIN_COUNTRIES = 5;
+const MIN_ENTRIES = 5;
 
 export function VotingBooth({
   roundId,
   roundName,
   editionName,
-  countries,
+  entries,
+  selfVotingMode = "country_match",
 }: {
   roundId: string;
   roundName: string;
   editionName?: string | null;
-  countries: RoundCountry[];
+  entries: ResolvedEntry[];
+  selfVotingMode?: SelfVotingMode | string;
 }) {
   const alreadyVoted = hasSubmittedRound(roundId);
-  const [stage, setStage] = useState<Stage>(alreadyVoted ? "done" : "register");
+
+  const [stage, setStage] = useState<Stage>(
+    alreadyVoted ? "done" : "register",
+  );
+
   const [username, setUsername] = useState("");
-  const [home, setHome] = useState<string>("");
+  const [home, setHome] = useState("");
   const [points, setPoints] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
-  const [confirmation, setConfirmation] = useState<{
-    username: string;
-    home: string;
-    breakdown: { code: string; points: number }[];
-  } | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
-  // Full Solaris country library — used for the registration dropdown,
-  // because a voter may come from ANY Solaris country, even one not
-  // competing in the current round.
-  const { data: allCountries } = useQuery({
+  /*
+   * The voter identity is still a Solaris country.
+   *
+   * This is separate from the round participants. A round may contain:
+   * - countries
+   * - custom entries
+   * - both
+   *
+   * The country dropdown therefore continues to load the complete country
+   * library instead of only the entries competing in this round.
+   */
+  const {
+    data: allCountries,
+    isLoading: countriesLoading,
+    error: countriesError,
+  } = useQuery({
     queryKey: ["solaris-countries"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("countries")
         .select("code,name,flag,flag_url")
         .order("name");
+
       if (error) throw error;
+
       return (data ?? []) as CountryShape[];
     },
     staleTime: 60_000,
   });
 
-  const sorted = useMemo(
-    () => [...countries].sort((a, b) => a.display_order - b.display_order),
-    [countries],
+  const sortedEntries = useMemo(
+    () => sortEntries(entries),
+    [entries],
   );
 
-  // Resolve any country code (round or non-round) to a Country record.
-  const byCode = useMemo(() => {
-    const m = new Map<string, CountryShape>();
-    (allCountries ?? []).forEach((c) => m.set(c.code, c));
-    sorted.forEach((c) => m.set(c.country.code, c.country));
-    return m;
-  }, [allCountries, sorted]);
+  const byEntryKey = useMemo(
+    () => entryMap(sortedEntries),
+    [sortedEntries],
+  );
 
-  const used = Object.values(points).reduce((a, b) => a + b, 0);
-  const remaining = TOTAL - used;
-  const countriesUsed = Object.keys(points).filter((k) => points[k] > 0).length;
+  const byCountryCode = useMemo(() => {
+    const map = new Map<string, CountryShape>();
+
+    for (const country of allCountries ?? []) {
+      map.set(country.code, country);
+    }
+
+    for (const entry of sortedEntries) {
+      if (
+        entry.entry_type === "country" &&
+        entry.country_code &&
+        entry.country
+      ) {
+        map.set(entry.country_code, {
+          code: entry.country.code,
+          name: entry.country.name,
+          flag: entry.country.flag ?? "",
+          flag_url: entry.country.flag_url ?? null,
+        });
+      }
+    }
+
+    return map;
+  }, [allCountries, sortedEntries]);
+
+  const participantNoun = entryNoun(sortedEntries, true);
+  const participantNounSingle = entryNoun(sortedEntries, false);
+
+  const used = Object.values(points).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+
+  const remaining = Math.max(0, TOTAL - used);
+
+  const entriesUsed = Object.values(points).filter(
+    (value) => value > 0,
+  ).length;
+
+  /*
+   * The database currently treats the matching country entry as the voter's
+   * own entry for every restricted mode. Custom-entry identity linking can be
+   * added later without changing the ballot key model.
+   */
+  const isSelfEntry = (entry: ResolvedEntry) => {
+    if (selfVotingMode === "unrestricted") return false;
+
+    return (
+      entry.entry_type === "country" &&
+      Boolean(home) &&
+      entry.country_code === home
+    );
+  };
 
   const submitVoteFn = useServerFn(submitVote);
+
   const submitMut = useMutation({
     mutationFn: async () => {
       const ident = await buildClientIdentity();
-      const entries = Object.entries(points)
-        .filter(([, p]) => p > 0)
-        .map(([target_country_code, p]) => ({ target_country_code, points: p }));
+
+      /*
+       * IMPORTANT:
+       *
+       * target_country_code is still the legacy RPC JSON property name.
+       * Its VALUE is now the stable round entry key.
+       *
+       * For a country entry:
+       *   entry_key === country code
+       *
+       * For a custom entry:
+       *   entry_key === stable generated/custom entry key
+       */
+      const ballotEntries = Object.entries(points)
+        .filter(([, value]) => value > 0)
+        .map(([entryKey, value]) => ({
+          target_country_code: entryKey,
+          points: value,
+        }));
 
       const data = await submitVoteFn({
         data: {
           roundId,
           username: username.trim(),
           countryCode: home,
-          entries,
+          entries: ballotEntries,
           fingerprintHash: ident.fingerprint_hash,
           deviceTokenHash: ident.device_token_hash,
         },
       });
-      return { data, entries };
+
+      return {
+        data,
+        ballotEntries,
+      };
     },
-    onSuccess: ({ entries }) => {
+
+    onSuccess: ({ ballotEntries }) => {
       markRoundSubmitted(roundId);
+
       setConfirmation({
         username: username.trim(),
         home,
-        breakdown: entries
-          .map((e) => ({ code: e.target_country_code, points: e.points }))
-          .sort((a, b) => b.points - a.points),
+        breakdown: ballotEntries
+          .map((entry) => ({
+            entryKey: entry.target_country_code,
+            points: entry.points,
+          }))
+          .sort(
+            (a, b) =>
+              b.points - a.points ||
+              a.entryKey.localeCompare(b.entryKey),
+          ),
       });
+
       setStage("done");
+
       toast.success("Your vote has been recorded");
     },
-    onError: (e: any) => {
-      const msg = e?.message ?? "Could not submit your vote";
-      toast.error(msg);
-      if (/already voted|already recorded/i.test(msg)) {
+
+    onError: (error: any) => {
+      const message =
+        error?.message ??
+        "Could not submit your vote";
+
+      toast.error(message);
+
+      if (/already voted|already recorded/i.test(message)) {
         markRoundSubmitted(roundId);
         setStage("done");
       }
     },
   });
 
-  /* ---------- DONE ---------- */
+  /*
+   * ------------------------------------------------------------
+   * DONE
+   * ------------------------------------------------------------
+   */
+
   if (stage === "done") {
     return (
       <DoneCard
         roundName={roundName}
         editionName={editionName}
         confirmation={confirmation}
-        byCode={byCode}
+        byCountryCode={byCountryCode}
+        byEntryKey={byEntryKey}
       />
     );
   }
 
-  /* ---------- REGISTER ---------- */
+  /*
+   * ------------------------------------------------------------
+   * REGISTER
+   * ------------------------------------------------------------
+   */
+
   if (stage === "register") {
-    const ok = username.trim().length >= 2 && home;
+    const canContinue =
+      username.trim().length >= 2 &&
+      Boolean(home) &&
+      !countriesLoading &&
+      !countriesError;
+
     return (
-      <section className="glass-strong rounded-2xl p-6 sm:p-8 space-y-5 max-w-lg mx-auto">
-        <header className="text-center space-y-1">
+      <section className="glass-strong mx-auto max-w-lg space-y-5 rounded-2xl p-6 sm:p-8">
+        <header className="space-y-1 text-center">
           <p className="text-xs uppercase tracking-widest text-primary">
             {editionName ? `${editionName} · ` : ""}
             {roundName}
           </p>
-          <h2 className="text-2xl font-bold">Register to vote</h2>
+
+          <h2 className="text-2xl font-bold">
+            Register to vote
+          </h2>
+
           <p className="text-sm text-muted-foreground">
-            Pick a display name and the country you're voting from.
+            Pick a display name and the Solaris country you are voting from.
           </p>
         </header>
+
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">
+            <label
+              htmlFor="solaris-vote-username"
+              className="text-xs uppercase tracking-wider text-muted-foreground"
+            >
               Username
             </label>
+
             <Input
+              id="solaris-vote-username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(event) =>
+                setUsername(event.target.value)
+              }
               placeholder="e.g. NordicFan21"
               maxLength={40}
               autoFocus
             />
           </div>
+
           <div className="space-y-1.5">
             <label className="text-xs uppercase tracking-wider text-muted-foreground">
               Your home country
             </label>
-            <Select value={home} onValueChange={setHome}>
+
+            <Select
+              value={home}
+              onValueChange={setHome}
+              disabled={countriesLoading}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Select your country…" />
+                <SelectValue
+                  placeholder={
+                    countriesLoading
+                      ? "Loading countries…"
+                      : "Select your country…"
+                  }
+                />
               </SelectTrigger>
+
               <SelectContent className="max-h-[50vh]">
-                {(allCountries ?? []).map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
+                {(allCountries ?? []).map((country) => (
+                  <SelectItem
+                    key={country.code}
+                    value={country.code}
+                  >
                     <span className="inline-flex items-center gap-2">
-                      <CountryFlag country={c} size={18} />
-                      {c.name}
+                      <CountryFlag
+                        country={country}
+                        size={18}
+                      />
+
+                      {country.name}
                     </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-muted-foreground">
-              All {allCountries?.length ?? 0} Solaris nations are listed — even those not
-              competing in this round. You cannot vote for your own country.
-            </p>
+
+            {countriesError ? (
+              <p className="text-[11px] text-destructive">
+                The country list could not be loaded. Refresh the page and try
+                again.
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                All {allCountries?.length ?? 0} Solaris nations are listed,
+                including those not competing in this round.
+                {selfVotingMode === "unrestricted"
+                  ? " Self-voting is allowed in this round."
+                  : " You cannot vote for your own country entry."}
+              </p>
+            )}
           </div>
         </div>
+
         <Button
-          disabled={!ok}
+          disabled={!canContinue}
           onClick={() => setStage("vote")}
-          className="w-full bg-hero text-primary-foreground shadow-glow h-11"
+          className="bg-hero shadow-glow h-11 w-full text-primary-foreground"
         >
           <Vote className="h-4 w-4" />
+
           Enter the booth
         </Button>
       </section>
     );
   }
 
-  /* ---------- VOTE ---------- */
-  const adjust = (code: string, delta: number) => {
-    setPoints((prev) => {
-      const cur = prev[code] ?? 0;
-      let next = cur + delta;
+  /*
+   * ------------------------------------------------------------
+   * VOTE
+   * ------------------------------------------------------------
+   */
+
+  const adjust = (
+    entryKey: string,
+    delta: number,
+  ) => {
+    setPoints((previous) => {
+      const current = previous[entryKey] ?? 0;
+
+      let next = current + delta;
+
       if (next < 0) next = 0;
       if (next > MAX_PER) next = MAX_PER;
-      const sumOthers = used - cur;
-      if (sumOthers + next > TOTAL) next = TOTAL - sumOthers;
-      const out = { ...prev, [code]: next };
-      if (next === 0) delete out[code];
-      return out;
+
+      const currentTotal = Object.values(previous).reduce(
+        (sum, value) => sum + value,
+        0,
+      );
+
+      const otherTotal = currentTotal - current;
+
+      if (otherTotal + next > TOTAL) {
+        next = Math.max(0, TOTAL - otherTotal);
+      }
+
+      const output = {
+        ...previous,
+        [entryKey]: next,
+      };
+
+      if (next === 0) {
+        delete output[entryKey];
+      }
+
+      return output;
     });
   };
 
-  const canSubmit = used === TOTAL && countriesUsed >= MIN_COUNTRIES;
-  const homeCountry = byCode.get(home);
+  const canSubmit =
+    used === TOTAL &&
+    entriesUsed >= MIN_ENTRIES;
 
-  const visible = sorted.filter((c) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      c.country.name.toLowerCase().includes(q) ||
-      c.country.code.toLowerCase().includes(q)
-    );
-  });
+  const homeCountry =
+    byCountryCode.get(home);
+
+  const visibleEntries = sortedEntries.filter(
+    (entry) => {
+      const query = search.trim().toLowerCase();
+
+      if (!query) return true;
+
+      return (
+        getEntryDisplayName(entry)
+          .toLowerCase()
+          .includes(query) ||
+        getEntryCode(entry)
+          .toLowerCase()
+          .includes(query) ||
+        (entry.subtitle ?? "")
+          .toLowerCase()
+          .includes(query)
+      );
+    },
+  );
 
   return (
     <section className="space-y-5">
-      <div className="glass-strong rounded-2xl p-4 sm:p-5 sticky top-3 z-10 backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="glass-strong sticky top-3 z-10 rounded-2xl p-4 backdrop-blur-xl sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-widest text-primary truncate">
+            <p className="truncate text-[11px] uppercase tracking-widest text-primary">
               {editionName ? `${editionName} · ` : ""}
               {roundName}
             </p>
-            <p className="text-sm font-semibold truncate inline-flex items-center gap-1.5">
-              Voting as <span className="text-primary">{username}</span> ·{" "}
-              <CountryFlag country={homeCountry} size={16} />
-              {countryName(homeCountry)}
+
+            <p className="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-semibold">
+              Voting as{" "}
+              <span className="truncate text-primary">
+                {username}
+              </span>
+
+              <span aria-hidden>·</span>
+
+              <CountryFlag
+                country={homeCountry}
+                size={16}
+              />
+
+              <span className="truncate">
+                {countryName(homeCountry)}
+              </span>
             </p>
           </div>
+
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
               className={cn(
                 "tabular-nums",
-                remaining === 0 ? "text-primary border-primary/50" : "",
+                remaining === 0 &&
+                  "border-primary/50 text-primary",
               )}
             >
               {remaining} left
             </Badge>
+
             <Badge
               variant="outline"
               className={cn(
                 "tabular-nums",
-                countriesUsed >= MIN_COUNTRIES ? "text-primary border-primary/50" : "",
+                entriesUsed >= MIN_ENTRIES &&
+                  "border-primary/50 text-primary",
               )}
             >
-              {countriesUsed}/{MIN_COUNTRIES}+ countries
+              {entriesUsed}/{MIN_ENTRIES}+ {participantNoun}
             </Badge>
           </div>
         </div>
+
         <div
-          className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden"
+          className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={TOTAL}
@@ -288,28 +536,40 @@ export function VotingBooth({
           aria-label="Points distributed"
         >
           <div
-            className="h-full bg-hero transition-all duration-300"
-            style={{ width: `${Math.min(100, (used / TOTAL) * 100)}%` }}
+            className="bg-hero h-full transition-all duration-300"
+            style={{
+              width: `${Math.min(
+                100,
+                (used / TOTAL) * 100,
+              )}%`,
+            }}
           />
         </div>
-        {used > TOTAL && (
-          <div className="mt-2 text-xs flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-3.5 w-3.5" /> Too many points distributed.
+
+        {used > TOTAL ? (
+          <div className="mt-2 flex items-center gap-2 text-xs text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5" />
+
+            Too many points distributed.
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search countries…"
-            aria-label="Search countries in this round"
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
+            placeholder={`Search ${participantNoun}…`}
+            aria-label={`Search ${participantNoun} in this round`}
             className="pl-9"
           />
         </div>
+
         <Button
           variant="outline"
           className="shrink-0"
@@ -317,58 +577,105 @@ export function VotingBooth({
           onClick={() => setPoints({})}
         >
           <RotateCcw className="h-4 w-4" />
-          <span className="hidden sm:inline">Reset</span>
+
+          <span className="hidden sm:inline">
+            Reset
+          </span>
         </Button>
       </div>
 
-      {visible.length === 0 && (
-        <p className="text-center text-sm text-muted-foreground py-6">
-          No countries match “{search}”.
+      {visibleEntries.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          No {participantNoun} match “{search}”.
         </p>
-      )}
+      ) : null}
 
       <ul className="grid grid-cols-1 gap-2.5">
-        {visible.map((c) => {
+        {visibleEntries.map((entry) => {
+          const entryKey = entry.entry_key;
+          const blockedSelfVote = isSelfEntry(entry);
+          const value = points[entryKey] ?? 0;
 
-          const code = c.country.code;
-          const isHome = code === home;
-          const p = points[code] ?? 0;
           return (
             <li
-              key={code}
+              key={entry.id}
               className={cn(
-                "glass rounded-xl px-3 py-3 flex items-center gap-3",
-                isHome && "opacity-50",
-                p > 0 && "ring-1 ring-primary/40",
+                "glass flex min-w-0 items-center gap-3 rounded-xl px-3 py-3",
+                blockedSelfVote && "opacity-50",
+                value > 0 &&
+                  "ring-1 ring-primary/40",
               )}
             >
-              <CountryFlag country={c.country} size={32} />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{c.country.name}</div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  #{c.display_order}
-                  {isHome ? " · your country" : ""}
+              <EntryAvatar
+                entry={entry}
+                size={32}
+              />
+
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">
+                  {getEntryDisplayName(entry)}
+                </div>
+
+                <div className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
+                  #{entry.display_order}
+
+                  {entry.subtitle
+                    ? ` · ${entry.subtitle}`
+                    : ""}
+
+                  {blockedSelfVote
+                    ? " · your entry"
+                    : ""}
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
+
+              <div className="flex shrink-0 items-center gap-1.5">
                 <Button
+                  type="button"
                   variant="outline"
                   size="icon"
                   className="h-9 w-9"
-                  disabled={isHome || p === 0}
-                  onClick={() => adjust(code, -1)}
+                  disabled={
+                    blockedSelfVote ||
+                    value === 0
+                  }
+                  onClick={() =>
+                    adjust(entryKey, -1)
+                  }
+                  aria-label={`Remove one point from ${getEntryDisplayName(
+                    entry,
+                  )}`}
                 >
                   <Minus className="h-4 w-4" />
                 </Button>
-                <div className="w-9 text-center font-bold tabular-nums text-lg">{p}</div>
+
+                <div
+                  className="w-9 text-center text-lg font-bold tabular-nums"
+                  aria-label={`${value} points`}
+                >
+                  {value}
+                </div>
+
                 <Button
+                  type="button"
                   size="icon"
                   className={cn(
                     "h-9 w-9",
-                    p > 0 ? "bg-primary text-primary-foreground" : "bg-card border border-border",
+                    value > 0
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border bg-card",
                   )}
-                  disabled={isHome || p >= MAX_PER || remaining === 0}
-                  onClick={() => adjust(code, 1)}
+                  disabled={
+                    blockedSelfVote ||
+                    value >= MAX_PER ||
+                    remaining === 0
+                  }
+                  onClick={() =>
+                    adjust(entryKey, 1)
+                  }
+                  aria-label={`Add one point to ${getEntryDisplayName(
+                    entry,
+                  )}`}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -379,24 +686,41 @@ export function VotingBooth({
       </ul>
 
       <div className="sticky bottom-3 z-10">
-        <div className="glass-strong rounded-2xl p-4 space-y-3">
+        <div className="glass-strong space-y-3 rounded-2xl p-4">
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">
-              Need exactly <strong className="text-foreground">20</strong> points across at least{" "}
-              <strong className="text-foreground">5</strong> countries, max{" "}
-              <strong className="text-foreground">10</strong> per country.
+              Need exactly{" "}
+              <strong className="text-foreground">
+                {TOTAL}
+              </strong>{" "}
+              points across at least{" "}
+              <strong className="text-foreground">
+                {MIN_ENTRIES}
+              </strong>{" "}
+              {participantNoun}, max{" "}
+              <strong className="text-foreground">
+                {MAX_PER}
+              </strong>{" "}
+              per {participantNounSingle}.
             </span>
           </div>
+
           <Button
-            className="w-full h-12 bg-hero text-primary-foreground shadow-glow text-base"
-            disabled={!canSubmit || submitMut.isPending}
-            onClick={() => submitMut.mutate()}
+            className="bg-hero shadow-glow h-12 w-full text-base text-primary-foreground"
+            disabled={
+              !canSubmit ||
+              submitMut.isPending
+            }
+            onClick={() =>
+              submitMut.mutate()
+            }
           >
             {submitMut.isPending ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <Sparkles className="h-5 w-5" />
             )}
+
             Submit your televote
           </Button>
         </div>
@@ -409,83 +733,165 @@ function DoneCard({
   roundName,
   editionName,
   confirmation,
-  byCode,
+  byCountryCode,
+  byEntryKey,
 }: {
   roundName: string;
   editionName?: string | null;
-  confirmation:
-    | { username: string; home: string; breakdown: { code: string; points: number }[] }
-    | null;
-  byCode: Map<string, CountryShape>;
+  confirmation: Confirmation | null;
+  byCountryCode: Map<string, CountryShape>;
+  byEntryKey: Map<string, ResolvedEntry>;
 }) {
-  const homeCountry = confirmation ? byCode.get(confirmation.home) : null;
+  const homeCountry = confirmation
+    ? byCountryCode.get(
+        confirmation.home,
+      )
+    : null;
 
   const share = async () => {
     if (!confirmation) return;
+
     const lines = confirmation.breakdown
-      .map((b) => `${b.points} — ${countryName(byCode.get(b.code))}`)
+      .map((item) => {
+        const entry =
+          byEntryKey.get(
+            item.entryKey,
+          );
+
+        return `${item.points} — ${getEntryDisplayName(
+          entry,
+        )}`;
+      })
       .join("\n");
-    const text = `My ${editionName ? editionName + " " : ""}${roundName} televote:\n${lines}\n#GETTINGHIGH`;
+
+    const text =
+      `My ${
+        editionName
+          ? `${editionName} `
+          : ""
+      }${roundName} televote:\n` +
+      `${lines}\n` +
+      "#GETTINGHIGH";
+
     try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "My Solaris televote", text });
+      if (
+        typeof navigator !==
+          "undefined" &&
+        navigator.share
+      ) {
+        await navigator.share({
+          title: "My Solaris televote",
+          text,
+        });
+
         return;
       }
-      await navigator.clipboard.writeText(text);
-      toast.success("Vote summary copied to clipboard");
+
+      await navigator.clipboard.writeText(
+        text,
+      );
+
+      toast.success(
+        "Vote summary copied to clipboard",
+      );
     } catch {
-      /* user dismissed the share sheet — nothing to do */
+      /*
+       * The user may simply have dismissed the share sheet.
+       * No error toast is needed for that.
+       */
     }
   };
 
   return (
-    <section className="glass-strong rounded-2xl p-6 sm:p-8 max-w-xl mx-auto space-y-5 text-center animate-pop-in">
-
-      <div className="mx-auto h-14 w-14 rounded-2xl bg-hero grid place-items-center shadow-glow">
+    <section className="glass-strong mx-auto max-w-xl space-y-5 rounded-2xl p-6 text-center animate-pop-in sm:p-8">
+      <div className="bg-hero shadow-glow mx-auto grid h-14 w-14 place-items-center rounded-2xl">
         <CheckCircle2 className="h-7 w-7 text-primary-foreground" />
       </div>
+
       <div className="space-y-1">
         <p className="text-xs uppercase tracking-widest text-primary">
-          {editionName ? `${editionName} · ` : ""}
+          {editionName
+            ? `${editionName} · `
+            : ""}
+
           {roundName}
         </p>
-        <h2 className="text-2xl font-bold">Your vote is in</h2>
+
+        <h2 className="text-2xl font-bold">
+          Your vote is in
+        </h2>
+
         <p className="text-sm text-muted-foreground">
-          Thank you for taking part in the televote. Results are revealed live on stage.
+          Thank you for taking part in the televote. Results are revealed live
+          on stage.
         </p>
       </div>
 
-      {confirmation && (
-        <div className="text-left space-y-3">
-          <div className="text-xs text-muted-foreground inline-flex items-center gap-2">
-            {confirmation.username} · <CountryFlag country={homeCountry} size={16} />
-            {countryName(homeCountry)}
+      {confirmation ? (
+        <div className="space-y-3 text-left">
+          <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              {confirmation.username}
+            </span>
+
+            <span aria-hidden>·</span>
+
+            <CountryFlag
+              country={homeCountry}
+              size={16}
+            />
+
+            <span>
+              {countryName(homeCountry)}
+            </span>
           </div>
+
           <ul className="space-y-1.5">
-            {confirmation.breakdown.map((b) => {
-              const c = byCode.get(b.code);
-              return (
-                <li
-                  key={b.code}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg bg-card/60 border border-border"
-                >
-                  <CountryFlag country={c} size={28} />
-                  <span className="flex-1 text-sm truncate">{countryName(c)}</span>
-                  <span className="font-bold tabular-nums text-primary">{b.points}</span>
-                </li>
-              );
-            })}
+            {confirmation.breakdown.map(
+              (item) => {
+                const entry =
+                  byEntryKey.get(
+                    item.entryKey,
+                  );
+
+                return (
+                  <li
+                    key={item.entryKey}
+                    className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card/60 px-3 py-2"
+                  >
+                    <EntryAvatar
+                      entry={entry}
+                      size={28}
+                    />
+
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      {getEntryDisplayName(
+                        entry,
+                      )}
+                    </span>
+
+                    <span className="font-bold tabular-nums text-primary">
+                      {item.points}
+                    </span>
+                  </li>
+                );
+              },
+            )}
           </ul>
         </div>
-      )}
+      ) : null}
 
-      {confirmation && (
-        <Button variant="outline" className="w-full h-11" onClick={share}>
+      {confirmation ? (
+        <Button
+          variant="outline"
+          className="h-11 w-full"
+          onClick={share}
+        >
           <Share2 className="h-4 w-4" />
+
           Share my vote
         </Button>
-      )}
-
+      ) : null}
     </section>
   );
 }
