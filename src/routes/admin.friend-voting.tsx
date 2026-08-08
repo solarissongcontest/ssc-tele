@@ -9,6 +9,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Heart,
   History,
+  Loader2,
   RefreshCcw,
   Search,
   Sliders,
@@ -17,15 +18,15 @@ import {
 import { toast } from "sonner";
 
 import { AdminShell } from "@/components/admin-shell";
+import { AnalysisScopePicker } from "@/components/analysis-scope-picker";
 import { CountryFlag } from "@/components/country-flag";
-import { EmptyState } from "@/components/empty-state";
 import { EntryAvatar } from "@/components/entry-avatar";
-import { TableSkeleton } from "@/components/panel-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -49,34 +50,32 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useEntryKeyCatalog } from "@/hooks/use-entry-key-catalog";
 import { useAllCountries } from "@/hooks/use-round-results";
+import {
+  getScopedFriendVotingAnalysis,
+  type ScopedFriendRelationship,
+} from "@/lib/analysis-scope.functions";
+import {
+  DEFAULT_ANALYSIS_SCOPE,
+  analysisScopeKey,
+  type AnalysisScope,
+} from "@/lib/analysis-scope";
 import { downloadCSV } from "@/lib/export";
 import {
-  getEntryDisplayName,
-  entryMap,
-} from "@/lib/round-entries";
-import {
-  getFriendVotingRelationship,
   getFriendVotingSettings,
-  listFriendVotingGroups,
-  listFriendVotingRelationships,
-  listModerationHistory,
-  recalculateFriendVoting,
   saveFriendVotingSettings,
   setRelationshipReview,
-  type RelationshipRow,
 } from "@/lib/friend-voting.functions";
 import type { FriendVotingSettings } from "@/lib/friend-voting-math";
+import {
+  entryMap,
+  getEntryDisplayName,
+} from "@/lib/round-entries";
 
 export const Route = createFileRoute("/admin/friend-voting")({
   head: () => ({
     meta: [
       {
         title: "Friend-Voting Analysis — Solaris Admin",
-      },
-      {
-        name: "description",
-        content:
-          "Long-term relationship analysis between stable Solaris voter identities and stable target entry keys.",
       },
     ],
   }),
@@ -85,26 +84,11 @@ export const Route = createFileRoute("/admin/friend-voting")({
 
 const REVIEW_STATUSES = [
   { value: "new", label: "New" },
-  {
-    value: "under_review",
-    label: "Under review",
-  },
-  {
-    value: "watchlist",
-    label: "Watchlist",
-  },
-  {
-    value: "confirmed",
-    label: "Confirmed friend voting",
-  },
-  {
-    value: "legitimate",
-    label: "Legitimate",
-  },
-  {
-    value: "dismissed",
-    label: "Dismissed",
-  },
+  { value: "under_review", label: "Under review" },
+  { value: "watchlist", label: "Watchlist" },
+  { value: "confirmed", label: "Confirmed friend voting" },
+  { value: "legitimate", label: "Legitimate" },
+  { value: "dismissed", label: "Dismissed" },
 ];
 
 function riskClass(score: number) {
@@ -124,22 +108,11 @@ function riskClass(score: number) {
 }
 
 function FriendVotingPage() {
-  const qc = useQueryClient();
+  const scopedFn = useServerFn(getScopedFriendVotingAnalysis);
+  const { data: countries = [] } = useAllCountries();
 
-  const listFn = useServerFn(
-    listFriendVotingRelationships,
-  );
-  const groupsFn = useServerFn(
-    listFriendVotingGroups,
-  );
-  const historyFn = useServerFn(
-    listModerationHistory,
-  );
-  const recalcFn = useServerFn(
-    recalculateFriendVoting,
-  );
-
-  const { data: countries } = useAllCountries();
+  const [scope, setScope] =
+    useState<AnalysisScope>(DEFAULT_ANALYSIS_SCOPE);
 
   const [search, setSearch] = useState("");
   const [minRisk, setMinRisk] = useState(0);
@@ -147,102 +120,48 @@ function FriendVotingPage() {
     useState("all");
   const [onlyRepeated, setOnlyRepeated] =
     useState(false);
-  const [openId, setOpenId] =
-    useState<string | null>(null);
 
-  const relationships = useQuery({
+  const [selected, setSelected] =
+    useState<ScopedFriendRelationship | null>(null);
+
+  const scoped = useQuery({
     queryKey: [
-      "fv.rels",
-      search,
-      minRisk,
-      reviewStatus,
-      onlyRepeated,
+      "scoped-friend-voting",
+      analysisScopeKey(scope),
     ],
-
     queryFn: () =>
-      listFn({
-        data: {
-          search,
-          minRisk,
-          reviewStatus:
-            reviewStatus === "all"
-              ? null
-              : reviewStatus,
-          onlyRepeated,
-        },
-      }) as Promise<RelationshipRow[]>,
+      scopedFn({
+        data: { scope },
+      }),
   });
 
-  const groups = useQuery({
-    queryKey: ["fv.groups"],
-    queryFn: () =>
-      groupsFn() as Promise<any[]>,
-  });
-
-  const history = useQuery({
-    queryKey: ["fv.history"],
-    queryFn: () =>
-      historyFn({
-        data: {},
-      }) as Promise<any[]>,
-  });
-
-  const recalc = useMutation({
-    mutationFn: () =>
-      recalcFn() as Promise<any>,
-
-    onSuccess: (result) => {
-      toast.success(
-        `Analysis rebuilt · ${result.relationships} relationships · ${result.groups} friend groups`,
-      );
-
-      void qc.invalidateQueries({
-        queryKey: ["fv.rels"],
-      });
-
-      void qc.invalidateQueries({
-        queryKey: ["fv.groups"],
-      });
-
-      void qc.invalidateQueries({
-        queryKey: ["fv.history"],
-      });
-    },
-
-    onError: (error: any) =>
-      toast.error(
-        error?.message ??
-          "Recalculation failed",
-      ),
-  });
-
-  const rows =
-    relationships.data ?? [];
+  const relationships = scoped.data?.relationships ?? [];
+  const groups = scoped.data?.groups ?? [];
+  const moderationEvents =
+    scoped.data?.moderationEvents ?? [];
 
   const targetKeys = useMemo(
     () =>
       Array.from(
-        new Set([
-          ...rows.map(
-            (row) =>
-              row.target_country_code,
-          ),
-          ...(history.data ?? [])
-            .map(
-              (event: any) =>
-                event.target_country_code,
-            )
-            .filter(Boolean),
-        ]),
+        new Set(
+          [
+            ...relationships.map(
+              (row) => row.target_country_code,
+            ),
+            ...moderationEvents
+              .map(
+                (event: any) =>
+                  event.target_country_code,
+              )
+              .filter(Boolean),
+          ].filter(Boolean),
+        ),
       ),
-    [rows, history.data],
+    [relationships, moderationEvents],
   );
 
-  const {
-    data: targetEntries = [],
-  } = useEntryKeyCatalog(
-    targetKeys,
-  );
+  const { data: targetEntries = [] } =
+    useEntryKeyCatalog(targetKeys);
 
   const byEntryKey = useMemo(
     () => entryMap(targetEntries),
@@ -252,1024 +171,726 @@ function FriendVotingPage() {
   const byCountryCode = useMemo(() => {
     const map = new Map<string, any>();
 
-    for (const country of
-      countries ?? []) {
-      map.set(
-        country.code,
-        country,
-      );
+    for (const country of countries) {
+      map.set(country.code, country);
     }
 
     return map;
   }, [countries]);
 
-  const targetName = (
-    entryKey:
-      | string
-      | null
-      | undefined,
-  ) => {
-    if (!entryKey) return "—";
+  const voterName = (countryCode: string) =>
+    byCountryCode.get(countryCode)?.name ??
+    countryCode;
 
-    const entry =
-      byEntryKey.get(entryKey);
+  const targetName = (entryKey: string) => {
+    const entry = byEntryKey.get(entryKey);
 
     return entry
-      ? getEntryDisplayName(
-          entry,
-        )
+      ? getEntryDisplayName(entry)
       : entryKey;
   };
 
-  const voterName = (
-    countryCode:
-      | string
-      | null
-      | undefined,
-  ) => {
-    if (!countryCode) return "—";
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
 
-    return (
-      byCountryCode.get(
-        countryCode,
-      )?.name ??
-      countryCode
-    );
-  };
+    return relationships.filter((row) => {
+      if (row.risk_score < minRisk) return false;
 
-  const summary =
-    useMemo(() => {
-      const high = rows.filter(
-        (row) =>
-          row.risk_score >= 65,
-      ).length;
+      if (
+        reviewStatus !== "all" &&
+        row.review_status !== reviewStatus
+      ) {
+        return false;
+      }
 
-      const repeated =
-        rows.filter(
-          (row) =>
-            row.repeated_after_moderation,
-        ).length;
+      if (
+        onlyRepeated &&
+        !row.repeated_after_moderation
+      ) {
+        return false;
+      }
 
-      const watch =
-        rows.filter(
-          (row) =>
-            row.review_status ===
-            "watchlist",
-        ).length;
+      if (needle) {
+        const haystack = [
+          row.voting_country_code,
+          voterName(row.voting_country_code),
+          row.target_country_code,
+          targetName(row.target_country_code),
+        ]
+          .join(" ")
+          .toLowerCase();
 
-      return {
-        total: rows.length,
-        high,
-        repeated,
-        watch,
-      };
-    }, [rows]);
+        if (!haystack.includes(needle)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [
+    relationships,
+    minRisk,
+    reviewStatus,
+    onlyRepeated,
+    search,
+    byCountryCode,
+    byEntryKey,
+  ]);
+
+  const summary = useMemo(
+    () => ({
+      total: relationships.length,
+      high: relationships.filter(
+        (row) => row.risk_score >= 65,
+      ).length,
+      repeated: relationships.filter(
+        (row) => row.repeated_after_moderation,
+      ).length,
+      watch: relationships.filter(
+        (row) => row.review_status === "watchlist",
+      ).length,
+    }),
+    [relationships],
+  );
 
   return (
     <AdminShell title="Friend-Voting Analysis">
       <div className="space-y-6">
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            The voting side of a
-            relationship is the
-            permanent Solaris
-            delegation country.
-            The receiving side is
-            a stable target
-            entry_key, which may
-            represent either a
-            country entry or a
-            custom entry.
-            Usernames and network
-            signals remain
-            supporting evidence
-            rather than identity.
-          </p>
+        <AnalysisScopePicker
+          value={scope}
+          onChange={setScope}
+        />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              Risk is recalculated from ballots inside the selected period.
+              The voter side remains the permanent Solaris country identity;
+              the receiving side remains a stable target entry key.
+            </p>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              {scoped.data
+                ? `${scoped.data.editions.length} edition${
+                    scoped.data.editions.length === 1
+                      ? ""
+                      : "s"
+                  } · ${scoped.data.rounds.length} round${
+                    scoped.data.rounds.length === 1
+                      ? ""
+                      : "s"
+                  }`
+                : "Loading scope…"}
+            </p>
+          </div>
 
           <Button
-            onClick={() =>
-              recalc.mutate()
-            }
-            disabled={
-              recalc.isPending
-            }
+            onClick={() => scoped.refetch()}
+            disabled={scoped.isFetching}
           >
             <RefreshCcw
               className={
-                recalc.isPending
+                scoped.isFetching
                   ? "h-4 w-4 animate-spin"
                   : "h-4 w-4"
               }
             />
-
-            {recalc.isPending
-              ? "Analysing…"
-              : "Recalculate analysis"}
+            Refresh analysis
           </Button>
-        </header>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat
-            label="Relationships"
-            value={summary.total}
-          />
-          <Stat
-            label="High risk (65+)"
-            value={summary.high}
-          />
-          <Stat
-            label="Repeat offenders"
-            value={summary.repeated}
-          />
-          <Stat
-            label="On watchlist"
-            value={summary.watch}
-          />
         </div>
 
-        <Tabs defaultValue="relationships">
-          <TabsList>
-            <TabsTrigger value="relationships">
-              <Heart className="mr-1.5 h-4 w-4" />
-              Relationships
-            </TabsTrigger>
-
-            <TabsTrigger value="groups">
-              <Users className="mr-1.5 h-4 w-4" />
-              Friend groups
-            </TabsTrigger>
-
-            <TabsTrigger value="history">
-              <History className="mr-1.5 h-4 w-4" />
-              Moderation history
-            </TabsTrigger>
-
-            <TabsTrigger value="settings">
-              <Sliders className="mr-1.5 h-4 w-4" />
-              Detection settings
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent
-            value="relationships"
-            className="mt-4 space-y-4"
-          >
-            <div className="glass-strong flex flex-wrap items-end gap-4 rounded-2xl p-4">
-              <div className="min-w-[200px] flex-1 space-y-1.5">
-                <Label className="text-xs uppercase tracking-widest text-primary">
-                  Identity / target key
-                </Label>
-
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                  <Input
-                    className="pl-9"
-                    placeholder="Search voter country or target entry key"
-                    value={search}
-                    onChange={(
-                      event,
-                    ) =>
-                      setSearch(
-                        event
-                          .target
-                          .value,
-                      )
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="w-48 space-y-1.5">
-                <Label className="text-xs uppercase tracking-widest text-primary">
-                  Minimum risk:{" "}
-                  {minRisk}
-                </Label>
-
-                <Slider
-                  value={[
-                    minRisk,
-                  ]}
-                  min={0}
-                  max={100}
-                  step={5}
-                  onValueChange={(
-                    value,
-                  ) =>
-                    setMinRisk(
-                      value[0] ??
-                        0,
-                    )
-                  }
-                />
-              </div>
-
-              <div className="w-52 space-y-1.5">
-                <Label className="text-xs uppercase tracking-widest text-primary">
-                  Review status
-                </Label>
-
-                <Select
-                  value={
-                    reviewStatus
-                  }
-                  onValueChange={
-                    setReviewStatus
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="all">
-                      All
-                    </SelectItem>
-
-                    {REVIEW_STATUSES.map(
-                      (
-                        item,
-                      ) => (
-                        <SelectItem
-                          key={
-                            item.value
-                          }
-                          value={
-                            item.value
-                          }
-                        >
-                          {
-                            item.label
-                          }
-                        </SelectItem>
-                      ),
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center gap-2 pb-2">
-                <Switch
-                  checked={
-                    onlyRepeated
-                  }
-                  onCheckedChange={
-                    setOnlyRepeated
-                  }
-                />
-
-                <span className="text-sm">
-                  Repeat offenders
-                  only
-                </span>
-              </div>
-
-              {rows.length > 0 ? (
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    downloadCSV(
-                      "friend-voting-relationships.csv",
-                      rows.map(
-                        (
-                          row,
-                        ) => ({
-                          voting_country_code:
-                            row.voting_country_code,
-                          voting_country:
-                            voterName(
-                              row.voting_country_code,
-                            ),
-                          target_entry_key:
-                            row.target_country_code,
-                          target_entry:
-                            targetName(
-                              row.target_country_code,
-                            ),
-                          opportunities:
-                            row.shared_opportunities,
-                          support:
-                            row.support_count,
-                          max_scores:
-                            row.maximum_score_count,
-                          deleted_max_scores:
-                            row.deleted_maximum_score_count,
-                          avg_points:
-                            row.average_points,
-                          preference_lift:
-                            row.preference_lift,
-                          audience_uplift:
-                            row.audience_uplift,
-                          reciprocity:
-                            row.reciprocity_score,
-                          risk:
-                            row.risk_score,
-                          label:
-                            row.risk_label,
-                          review_status:
-                            row.review_status,
-                        }),
-                      ),
-                    )
-                  }
-                >
-                  Export CSV
-                </Button>
-              ) : null}
+        {scoped.isLoading ? (
+          <Loading />
+        ) : scoped.error ? (
+          <Empty
+            title="Friend-voting analysis failed"
+            body={
+              scoped.error instanceof Error
+                ? scoped.error.message
+                : "Unknown analysis error"
+            }
+          />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat
+                label="Relationships"
+                value={summary.total}
+              />
+              <Stat
+                label="High risk (65+)"
+                value={summary.high}
+              />
+              <Stat
+                label="Repeat offenders"
+                value={summary.repeated}
+              />
+              <Stat
+                label="On watchlist"
+                value={summary.watch}
+              />
             </div>
 
-            {relationships.isLoading ? (
-              <TableSkeleton />
-            ) : rows.length === 0 ? (
-              <EmptyState
-                icon={Heart}
-                title="No relationship data yet"
-                description="Run the analysis to build the historical relationship dataset."
-              />
-            ) : (
-              <div className="glass-strong overflow-x-auto rounded-2xl p-2">
-                <table className="w-full text-sm">
-                  <thead className="text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="py-2 pl-2 pr-3 text-left">
-                        Voting country
-                      </th>
-                      <th className="py-2 pr-3 text-left">
-                        Target entry
-                      </th>
-                      <th className="py-2 pr-3 text-right">
-                        Opps
-                      </th>
-                      <th className="py-2 pr-3 text-right">
-                        Support
-                      </th>
-                      <th className="py-2 pr-3 text-right">
-                        Max
-                      </th>
-                      <th className="py-2 pr-3 text-right">
-                        Avg
-                      </th>
-                      <th className="py-2 pr-3 text-right">
-                        Lift
-                      </th>
-                      <th className="py-2 pr-3 text-right">
-                        Uplift
-                      </th>
-                      <th className="py-2 pr-3 text-right">
-                        Recip.
-                      </th>
-                      <th className="py-2 pr-3 text-right">
-                        Risk
-                      </th>
-                      <th className="py-2 pr-2 text-left">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
+            <Tabs defaultValue="relationships">
+              <TabsList className="max-w-full overflow-x-auto">
+                <TabsTrigger value="relationships">
+                  <Heart className="mr-1.5 h-4 w-4" />
+                  Relationships
+                </TabsTrigger>
 
-                  <tbody>
-                    {rows.map(
-                      (row) => {
-                        const voterCountry =
-                          byCountryCode.get(
-                            row.voting_country_code,
-                          );
+                <TabsTrigger value="groups">
+                  <Users className="mr-1.5 h-4 w-4" />
+                  Friend groups
+                </TabsTrigger>
 
-                        const targetEntry =
-                          byEntryKey.get(
-                            row.target_country_code,
-                          );
+                <TabsTrigger value="history">
+                  <History className="mr-1.5 h-4 w-4" />
+                  Moderation history
+                </TabsTrigger>
 
-                        return (
-                          <tr
-                            key={
-                              row.id
-                            }
-                            className="cursor-pointer border-t border-border/60 hover:bg-primary/5"
-                            onClick={() =>
-                              setOpenId(
-                                row.id,
-                              )
-                            }
-                          >
-                            <td className="py-2 pl-2 pr-3">
-                              <span className="inline-flex items-center gap-1.5 font-medium">
-                                <CountryFlag
-                                  country={
-                                    voterCountry
-                                  }
-                                  size={
-                                    18
-                                  }
-                                />
+                <TabsTrigger value="settings">
+                  <Sliders className="mr-1.5 h-4 w-4" />
+                  Detection settings
+                </TabsTrigger>
+              </TabsList>
 
-                                {voterName(
-                                  row.voting_country_code,
-                                )}
-                              </span>
-                            </td>
+              <TabsContent
+                value="relationships"
+                className="mt-4 space-y-4"
+              >
+                <div className="glass-strong flex flex-wrap items-end gap-4 rounded-2xl p-4">
+                  <div className="min-w-[220px] flex-1 space-y-1.5">
+                    <Label className="text-xs uppercase tracking-widest text-primary">
+                      Search
+                    </Label>
 
-                            <td className="py-2 pr-3">
-                              <span className="inline-flex items-center gap-1.5">
-                                <EntryAvatar
-                                  entry={
-                                    targetEntry
-                                  }
-                                  size={
-                                    18
-                                  }
-                                />
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
-                                {targetName(
-                                  row.target_country_code,
-                                )}
-                              </span>
-                            </td>
-
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {
-                                row.shared_opportunities
-                              }
-                            </td>
-
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {
-                                row.support_count
-                              }{" "}
-                              (
-                              {Math.round(
-                                row.support_frequency *
-                                  100,
-                              )}
-                              %)
-                            </td>
-
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {
-                                row.maximum_score_count
-                              }
-
-                              {row.deleted_maximum_score_count >
-                              0 ? (
-                                <span className="text-muted-foreground">
-                                  {" "}
-                                  (+
-                                  {
-                                    row.deleted_maximum_score_count
-                                  }{" "}
-                                  del)
-                                </span>
-                              ) : null}
-                            </td>
-
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {row.average_points.toFixed(
-                                2,
-                              )}
-                            </td>
-
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {row.preference_lift.toFixed(
-                                2,
-                              )}
-                              ×
-                            </td>
-
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {row.audience_uplift >=
-                              0
-                                ? "+"
-                                : ""}
-                              {row.audience_uplift.toFixed(
-                                1,
-                              )}
-                            </td>
-
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {row.reciprocity_score.toFixed(
-                                2,
-                              )}
-                            </td>
-
-                            <td className="py-2 pr-3 text-right">
-                              <Badge
-                                className={riskClass(
-                                  row.risk_score,
-                                )}
-                              >
-                                {
-                                  row.risk_score
-                                }
-                              </Badge>
-                            </td>
-
-                            <td className="py-2 pr-2">
-                              <Badge
-                                variant="outline"
-                                className="text-[10px]"
-                              >
-                                {REVIEW_STATUSES.find(
-                                  (
-                                    item,
-                                  ) =>
-                                    item.value ===
-                                    row.review_status,
-                                )
-                                  ?.label ??
-                                  row.review_status}
-                              </Badge>
-                            </td>
-                          </tr>
-                        );
-                      },
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent
-            value="groups"
-            className="mt-4"
-          >
-            {groups.isLoading ? (
-              <TableSkeleton />
-            ) : (groups.data ?? [])
-                .length === 0 ? (
-              <EmptyState
-                icon={Users}
-                title="No friend groups detected"
-                description="Groups appear when three or more delegation identities repeatedly exchange strong support."
-              />
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(groups.data ?? []).map(
-                  (
-                    group,
-                  ) => (
-                    <div
-                      key={
-                        group.id
-                      }
-                      className="glass-strong rounded-2xl p-4"
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <h3 className="font-semibold">
-                          {
-                            group.label
-                          }{" "}
-                          ·{" "}
-                          {
-                            group.members
-                              .length
-                          }{" "}
-                          delegations
-                        </h3>
-
-                        <Badge
-                          className={riskClass(
-                            group.risk_score,
-                          )}
-                        >
-                          {
-                            group.risk_score
-                          }
-                        </Badge>
-                      </div>
-
-                      <p className="mb-2 text-xs text-muted-foreground">
-                        {
-                          group.risk_label
+                      <Input
+                        className="pl-9"
+                        placeholder="Voter country or target entry"
+                        value={search}
+                        onChange={(event) =>
+                          setSearch(event.target.value)
                         }
-                      </p>
+                      />
+                    </div>
+                  </div>
 
-                      <div className="mb-3 flex flex-wrap gap-1">
-                        {group.members.map(
-                          (
-                            member: string,
-                          ) => (
-                            <Badge
-                              key={
-                                member
+                  <div className="w-48 space-y-1.5">
+                    <Label className="text-xs uppercase tracking-widest text-primary">
+                      Minimum risk: {minRisk}
+                    </Label>
+
+                    <Slider
+                      value={[minRisk]}
+                      min={0}
+                      max={100}
+                      step={5}
+                      onValueChange={(value) =>
+                        setMinRisk(value[0] ?? 0)
+                      }
+                    />
+                  </div>
+
+                  <div className="w-52 space-y-1.5">
+                    <Label className="text-xs uppercase tracking-widest text-primary">
+                      Review status
+                    </Label>
+
+                    <Select
+                      value={reviewStatus}
+                      onValueChange={setReviewStatus}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+
+                      <SelectContent>
+                        <SelectItem value="all">
+                          All
+                        </SelectItem>
+
+                        {REVIEW_STATUSES.map((item) => (
+                          <SelectItem
+                            key={item.value}
+                            value={item.value}
+                          >
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <label className="flex min-h-11 items-center gap-2">
+                    <Switch
+                      checked={onlyRepeated}
+                      onCheckedChange={setOnlyRepeated}
+                    />
+                    <span className="text-sm">
+                      Repeat offenders only
+                    </span>
+                  </label>
+
+                  {filtered.length > 0 ? (
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        downloadCSV(
+                          `friend-voting-${analysisScopeKey(
+                            scope,
+                          )}.csv`,
+                          filtered.map((row) => ({
+                            voting_country_code:
+                              row.voting_country_code,
+                            voting_country: voterName(
+                              row.voting_country_code,
+                            ),
+                            target_entry_key:
+                              row.target_country_code,
+                            target_entry: targetName(
+                              row.target_country_code,
+                            ),
+                            opportunities:
+                              row.shared_opportunities,
+                            support: row.support_count,
+                            max_scores:
+                              row.maximum_score_count,
+                            avg_points:
+                              row.average_points,
+                            preference_lift:
+                              row.preference_lift,
+                            audience_uplift:
+                              row.audience_uplift,
+                            reciprocity:
+                              row.reciprocity_score,
+                            risk: row.risk_score,
+                            label: row.risk_label,
+                            review_status:
+                              row.review_status,
+                            editions:
+                              row.editions_count,
+                            rounds:
+                              row.rounds_count,
+                          })),
+                        )
+                      }
+                    >
+                      Export CSV
+                    </Button>
+                  ) : null}
+                </div>
+
+                {filtered.length === 0 ? (
+                  <Empty
+                    title="No relationship data"
+                    body="No relationships match this period and filter combination."
+                  />
+                ) : (
+                  <div className="glass-strong overflow-x-auto rounded-2xl p-2">
+                    <table className="w-full min-w-[980px] text-sm">
+                      <thead className="text-xs uppercase text-muted-foreground">
+                        <tr>
+                          <th className="py-2 pl-2 pr-3 text-left">
+                            Voting country
+                          </th>
+                          <th className="py-2 pr-3 text-left">
+                            Target entry
+                          </th>
+                          <th className="py-2 pr-3 text-right">
+                            Opps
+                          </th>
+                          <th className="py-2 pr-3 text-right">
+                            Support
+                          </th>
+                          <th className="py-2 pr-3 text-right">
+                            Max
+                          </th>
+                          <th className="py-2 pr-3 text-right">
+                            Avg
+                          </th>
+                          <th className="py-2 pr-3 text-right">
+                            Lift
+                          </th>
+                          <th className="py-2 pr-3 text-right">
+                            Uplift
+                          </th>
+                          <th className="py-2 pr-3 text-right">
+                            Recip.
+                          </th>
+                          <th className="py-2 pr-3 text-right">
+                            Risk
+                          </th>
+                          <th className="py-2 pr-2 text-left">
+                            Status
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {filtered.map((row) => {
+                          const targetEntry =
+                            byEntryKey.get(
+                              row.target_country_code,
+                            );
+
+                          return (
+                            <tr
+                              key={`${row.voting_country_code}>${row.target_country_code}`}
+                              className="cursor-pointer border-t border-border/60 hover:bg-primary/5"
+                              onClick={() =>
+                                setSelected(row)
                               }
+                            >
+                              <td className="py-2 pl-2 pr-3">
+                                <span className="inline-flex items-center gap-1.5 font-medium">
+                                  <CountryFlag
+                                    country={byCountryCode.get(
+                                      row.voting_country_code,
+                                    )}
+                                    size={18}
+                                  />
+                                  {voterName(
+                                    row.voting_country_code,
+                                  )}
+                                </span>
+                              </td>
+
+                              <td className="py-2 pr-3">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <EntryAvatar
+                                    entry={targetEntry}
+                                    size={18}
+                                  />
+                                  {targetName(
+                                    row.target_country_code,
+                                  )}
+                                </span>
+                              </td>
+
+                              <td className="py-2 pr-3 text-right tabular-nums">
+                                {row.shared_opportunities}
+                              </td>
+
+                              <td className="py-2 pr-3 text-right tabular-nums">
+                                {row.support_count} (
+                                {Math.round(
+                                  row.support_frequency * 100,
+                                )}
+                                %)
+                              </td>
+
+                              <td className="py-2 pr-3 text-right tabular-nums">
+                                {row.maximum_score_count}
+                              </td>
+
+                              <td className="py-2 pr-3 text-right tabular-nums">
+                                {row.average_points.toFixed(2)}
+                              </td>
+
+                              <td className="py-2 pr-3 text-right tabular-nums">
+                                {row.preference_lift.toFixed(2)}×
+                              </td>
+
+                              <td className="py-2 pr-3 text-right tabular-nums">
+                                {row.audience_uplift >= 0
+                                  ? "+"
+                                  : ""}
+                                {row.audience_uplift.toFixed(1)}
+                              </td>
+
+                              <td className="py-2 pr-3 text-right tabular-nums">
+                                {row.reciprocity_score.toFixed(
+                                  2,
+                                )}
+                              </td>
+
+                              <td className="py-2 pr-3 text-right">
+                                <Badge
+                                  className={riskClass(
+                                    row.risk_score,
+                                  )}
+                                >
+                                  {row.risk_score}
+                                </Badge>
+                              </td>
+
+                              <td className="py-2 pr-2">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px]"
+                                >
+                                  {REVIEW_STATUSES.find(
+                                    (item) =>
+                                      item.value ===
+                                      row.review_status,
+                                  )?.label ??
+                                    row.review_status}
+                                </Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent
+                value="groups"
+                className="mt-4"
+              >
+                {groups.length === 0 ? (
+                  <Empty
+                    title="No friend groups"
+                    body="No multi-delegation friend-voting groups were detected in this scope."
+                  />
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {groups.map((group, index) => (
+                      <div
+                        key={`${group.label}:${index}`}
+                        className="glass-strong rounded-2xl p-4"
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h3 className="font-semibold">
+                            {group.label} ·{" "}
+                            {group.members.length} delegations
+                          </h3>
+
+                          <Badge
+                            className={riskClass(
+                              group.risk_score,
+                            )}
+                          >
+                            {group.risk_score}
+                          </Badge>
+                        </div>
+
+                        <p className="mb-2 text-xs text-muted-foreground">
+                          {group.risk_label}
+                        </p>
+
+                        <div className="mb-3 flex flex-wrap gap-1">
+                          {group.members.map((member) => (
+                            <Badge
+                              key={member}
                               variant="outline"
                               className="text-[10px]"
                             >
-                              {voterName(
-                                member,
-                              )}
+                              {voterName(member)}
                             </Badge>
-                          ),
-                        )}
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <Metric
+                            label="Internal max share"
+                            value={`${Math.round(
+                              group.internal_maximum_share *
+                                100,
+                            )}%`}
+                          />
+                          <Metric
+                            label="Internal top-3 share"
+                            value={`${Math.round(
+                              group.internal_top_three_share *
+                                100,
+                            )}%`}
+                          />
+                          <Metric
+                            label="Editions observed"
+                            value={String(
+                              group.editions_observed,
+                            )}
+                          />
+                          <Metric
+                            label="Rounds observed"
+                            value={String(
+                              group.rounds_observed,
+                            )}
+                          />
+                        </div>
+
+                        {group.reasons.length > 0 ? (
+                          <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                            {group.reasons.map(
+                              (reason, reasonIndex) => (
+                                <li key={reasonIndex}>
+                                  • {reason}
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        ) : null}
                       </div>
-
-                      <ul className="space-y-1 text-xs text-muted-foreground">
-                        {(
-                          group.reasons ??
-                          []
-                        ).map(
-                          (
-                            reason: string,
-                            index: number,
-                          ) => (
-                            <li
-                              key={
-                                index
-                              }
-                            >
-                              •{" "}
-                              {
-                                reason
-                              }
-                            </li>
-                          ),
-                        )}
-                      </ul>
-
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                        <Metric
-                          label="Internal max share"
-                          value={`${Math.round(
-                            group.internal_maximum_share *
-                              100,
-                          )}%`}
-                        />
-
-                        <Metric
-                          label="Internal top-3 share"
-                          value={`${Math.round(
-                            group.internal_top_three_share *
-                              100,
-                          )}%`}
-                        />
-
-                        <Metric
-                          label="Avg internal support"
-                          value={Number(
-                            group.average_internal_support,
-                          ).toFixed(
-                            2,
-                          )}
-                        />
-
-                        <Metric
-                          label="Avg external support"
-                          value={Number(
-                            group.average_external_support,
-                          ).toFixed(
-                            2,
-                          )}
-                        />
-                      </div>
-                    </div>
-                  ),
+                    ))}
+                  </div>
                 )}
-              </div>
-            )}
-          </TabsContent>
+              </TabsContent>
 
-          <TabsContent
-            value="history"
-            className="mt-4"
-          >
-            {history.isLoading ? (
-              <TableSkeleton />
-            ) : (history.data ?? [])
-                .length === 0 ? (
-              <EmptyState
-                icon={History}
-                title="No moderation history"
-                description="Every moderation action on a ballot or relationship is recorded here permanently."
-              />
-            ) : (
-              <div className="glass-strong overflow-x-auto rounded-2xl p-2">
-                <table className="w-full text-sm">
-                  <thead className="text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="py-2 pl-2 pr-3 text-left">
-                        When
-                      </th>
-                      <th className="py-2 pr-3 text-left">
-                        Voter country
-                      </th>
-                      <th className="py-2 pr-3 text-left">
-                        Target entry
-                      </th>
-                      <th className="py-2 pr-3 text-left">
-                        Action
-                      </th>
-                      <th className="py-2 pr-3 text-left">
-                        Category
-                      </th>
-                      <th className="py-2 pr-3 text-left">
-                        Moderator
-                      </th>
-                      <th className="py-2 pr-2 text-left">
-                        Note
-                      </th>
-                    </tr>
-                  </thead>
+              <TabsContent
+                value="history"
+                className="mt-4"
+              >
+                {moderationEvents.length === 0 ? (
+                  <Empty
+                    title="No moderation history"
+                    body="No moderation events fall inside this selected analysis period."
+                  />
+                ) : (
+                  <div className="glass-strong overflow-x-auto rounded-2xl p-2">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="text-xs uppercase text-muted-foreground">
+                        <tr>
+                          <th className="py-2 pl-2 pr-3 text-left">
+                            When
+                          </th>
+                          <th className="py-2 pr-3 text-left">
+                            Voter
+                          </th>
+                          <th className="py-2 pr-3 text-left">
+                            Target
+                          </th>
+                          <th className="py-2 pr-3 text-left">
+                            Action
+                          </th>
+                          <th className="py-2 pr-2 text-left">
+                            Note
+                          </th>
+                        </tr>
+                      </thead>
 
-                  <tbody>
-                    {(history.data ?? []).map(
-                      (
-                        event: any,
-                      ) => {
-                        const targetEntry =
-                          event.target_country_code
-                            ? byEntryKey.get(
-                                event.target_country_code,
-                              )
-                            : null;
+                      <tbody>
+                        {moderationEvents.map(
+                          (event: any) => (
+                            <tr
+                              key={event.id}
+                              className="border-t border-border/60"
+                            >
+                              <td className="whitespace-nowrap py-2 pl-2 pr-3 text-muted-foreground">
+                                {new Date(
+                                  event.performed_at,
+                                ).toLocaleString()}
+                              </td>
 
-                        return (
-                          <tr
-                            key={
-                              event.id
-                            }
-                            className="border-t border-border/60"
-                          >
-                            <td className="whitespace-nowrap py-2 pl-2 pr-3 text-muted-foreground">
-                              {new Date(
-                                event.performed_at,
-                              ).toLocaleString()}
-                            </td>
+                              <td className="py-2 pr-3">
+                                {voterName(
+                                  event.voting_country_code,
+                                )}
+                              </td>
 
-                            <td className="py-2 pr-3">
-                              {voterName(
-                                event.voting_country_code,
-                              )}
-                            </td>
+                              <td className="py-2 pr-3">
+                                {event.target_country_code
+                                  ? targetName(
+                                      event.target_country_code,
+                                    )
+                                  : "—"}
+                              </td>
 
-                            <td className="py-2 pr-3">
-                              {event.target_country_code ? (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <EntryAvatar
-                                    entry={
-                                      targetEntry
-                                    }
-                                    size={
-                                      16
-                                    }
-                                  />
+                              <td className="py-2 pr-3">
+                                {event.action}
+                              </td>
 
-                                  {targetName(
-                                    event.target_country_code,
-                                  )}
-                                </span>
-                              ) : (
-                                "—"
-                              )}
-                            </td>
+                              <td className="py-2 pr-2 text-muted-foreground">
+                                {event.moderator_note ?? "—"}
+                              </td>
+                            </tr>
+                          ),
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </TabsContent>
 
-                            <td className="py-2 pr-3">
-                              {
-                                event.action
-                              }
-                            </td>
+              <TabsContent
+                value="settings"
+                className="mt-4"
+              >
+                <SettingsPanel
+                  onSaved={() => scoped.refetch()}
+                />
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
 
-                            <td className="py-2 pr-3">
-                              {
-                                event.reason_category ??
-                                "—"
-                              }
-                            </td>
-
-                            <td className="py-2 pr-3">
-                              {
-                                event.performed_by_username ??
-                                "—"
-                              }
-                            </td>
-
-                            <td className="py-2 pr-2 text-muted-foreground">
-                              {
-                                event.moderator_note ??
-                                "—"
-                              }
-                            </td>
-                          </tr>
-                        );
-                      },
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent
-            value="settings"
-            className="mt-4"
-          >
-            <SettingsPanel />
-          </TabsContent>
-        </Tabs>
+        <RelationshipDialog
+          relationship={selected}
+          onClose={() => setSelected(null)}
+          voterName={voterName}
+          targetName={targetName}
+          byCountryCode={byCountryCode}
+          byEntryKey={byEntryKey}
+          onReviewed={() => scoped.refetch()}
+        />
       </div>
-
-      <RelationshipDialog
-        id={openId}
-        onClose={() =>
-          setOpenId(null)
-        }
-      />
     </AdminShell>
   );
 }
 
 function RelationshipDialog({
-  id,
+  relationship,
   onClose,
+  voterName,
+  targetName,
+  byCountryCode,
+  byEntryKey,
+  onReviewed,
 }: {
-  id: string | null;
+  relationship: ScopedFriendRelationship | null;
   onClose: () => void;
+  voterName: (code: string) => string;
+  targetName: (key: string) => string;
+  byCountryCode: Map<string, any>;
+  byEntryKey: Map<string, any>;
+  onReviewed: () => void;
 }) {
-  const qc = useQueryClient();
+  const reviewFn = useServerFn(setRelationshipReview);
 
-  const detailFn = useServerFn(
-    getFriendVotingRelationship,
-  );
-  const reviewFn = useServerFn(
-    setRelationshipReview,
-  );
-
-  const { data: countries } =
-    useAllCountries();
-
-  const [note, setNote] =
-    useState("");
   const [status, setStatus] =
     useState("under_review");
+  const [note, setNote] = useState("");
 
-  const detail = useQuery({
-    queryKey: [
-      "fv.detail",
-      id,
-    ],
-
-    queryFn: () =>
-      detailFn({
-        data: {
-          id: id!,
-        },
-      }) as Promise<any>,
-
-    enabled:
-      Boolean(id),
-  });
-
-  const relationship =
-    detail.data?.relationship;
-
-  const detailTargetKeys =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            [
-              relationship?.target_country_code,
-              ...(
-                detail.data
-                  ?.moderationEvents ??
-                []
-              ).map(
-                (
-                  event: any,
-                ) =>
-                  event.target_country_code,
-              ),
-            ].filter(
-              Boolean,
-            ) as string[],
-          ),
-        ),
-      [
-        relationship?.target_country_code,
-        detail.data
-          ?.moderationEvents,
-      ],
-    );
-
-  const {
-    data: targetEntries = [],
-  } = useEntryKeyCatalog(
-    detailTargetKeys,
-  );
-
-  const byEntryKey = useMemo(
-    () =>
-      entryMap(
-        targetEntries,
-      ),
-    [targetEntries],
-  );
-
-  const byCountryCode =
-    useMemo(() => {
-      const map =
-        new Map<
-          string,
-          any
-        >();
-
-      for (const country of
-        countries ?? []) {
-        map.set(
-          country.code,
-          country,
+  const review = useMutation({
+    mutationFn: async () => {
+      if (!relationship?.id) {
+        throw new Error(
+          "Run the stored all-history recalculation once before reviewing this relationship.",
         );
       }
 
-      return map;
-    }, [countries]);
-
-  const targetName = (
-    entryKey: string,
-  ) => {
-    const entry =
-      byEntryKey.get(
-        entryKey,
-      );
-
-    return entry
-      ? getEntryDisplayName(
-          entry,
-        )
-      : entryKey;
-  };
-
-  const voterName = (
-    countryCode: string,
-  ) =>
-    byCountryCode.get(
-      countryCode,
-    )?.name ??
-    countryCode;
-
-  const save = useMutation({
-    mutationFn: () =>
-      reviewFn({
+      return reviewFn({
         data: {
-          id: id!,
+          id: relationship.id,
           status,
           note,
         },
-      }) as Promise<any>,
-
-    onSuccess: () => {
-      toast.success(
-        "Review status saved",
-      );
-
-      void qc.invalidateQueries({
-        queryKey: [
-          "fv.rels",
-        ],
-      });
-
-      void qc.invalidateQueries({
-        queryKey: [
-          "fv.detail",
-          id,
-        ],
-      });
-
-      void qc.invalidateQueries({
-        queryKey: [
-          "fv.history",
-        ],
       });
     },
 
-    onError: (
-      error: any,
-    ) =>
-      toast.error(
-        error?.message ??
-          "Could not save",
-      ),
-  });
+    onSuccess: () => {
+      toast.success("Review saved");
+      onReviewed();
+      onClose();
+    },
 
-  const targetEntry =
-    relationship
-      ? byEntryKey.get(
-          relationship.target_country_code,
-        )
-      : null;
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Could not save review"),
+  });
 
   return (
     <Dialog
-      open={Boolean(id)}
-      onOpenChange={(
-        open,
-      ) => {
-        if (!open) {
-          onClose();
-        }
+      open={Boolean(relationship)}
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {relationship ? (
@@ -1280,22 +901,18 @@ function RelationshipDialog({
                   )}
                   size={20}
                 />
-
                 {voterName(
                   relationship.voting_country_code,
                 )}
-
                 <span className="text-muted-foreground">
                   →
                 </span>
-
                 <EntryAvatar
-                  entry={
-                    targetEntry
-                  }
+                  entry={byEntryKey.get(
+                    relationship.target_country_code,
+                  )}
                   size={20}
                 />
-
                 {targetName(
                   relationship.target_country_code,
                 )}
@@ -1306,78 +923,23 @@ function RelationshipDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {!relationship ? (
-          <TableSkeleton />
-        ) : (
+        {relationship ? (
           <div className="space-y-5">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Badge
                 className={riskClass(
                   relationship.risk_score,
                 )}
               >
-                Risk{" "}
-                {
-                  relationship.risk_score
-                }
+                Risk {relationship.risk_score}
               </Badge>
 
               <span className="text-sm text-muted-foreground">
-                {
-                  relationship.risk_label
-                }
+                {relationship.risk_label}
               </span>
             </div>
 
-            <section>
-              <h4 className="mb-2 text-xs uppercase tracking-widest text-primary">
-                Why this score
-              </h4>
-
-              <ul className="space-y-1 text-sm">
-                {(
-                  relationship.reasons ??
-                  []
-                ).map(
-                  (
-                    reason: any,
-                    index: number,
-                  ) => (
-                    <li
-                      key={
-                        index
-                      }
-                      className="flex items-start justify-between gap-3"
-                    >
-                      <span>
-                        {
-                          reason.text
-                        }
-                      </span>
-
-                      <span
-                        className={
-                          reason.delta >=
-                          0
-                            ? "tabular-nums text-amber-400"
-                            : "tabular-nums text-emerald-400"
-                        }
-                      >
-                        {reason.delta >
-                        0
-                          ? "+"
-                          : ""}
-                        {
-                          reason.delta
-                        }
-                      </span>
-                    </li>
-                  ),
-                )}
-              </ul>
-            </section>
-
-            <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Metric
                 label="Opportunities"
                 value={String(
@@ -1387,8 +949,7 @@ function RelationshipDialog({
               <Metric
                 label="Support rate"
                 value={`${Math.round(
-                  relationship.support_frequency *
-                    100,
+                  relationship.support_frequency * 100,
                 )}%`}
               />
               <Metric
@@ -1402,21 +963,15 @@ function RelationshipDialog({
                 value={`${relationship.preference_lift}×`}
               />
               <Metric
-                label="Audience uplift"
-                value={String(
-                  relationship.audience_uplift,
-                )}
-              />
-              <Metric
-                label="Longest streak"
-                value={String(
-                  relationship.longest_support_streak,
-                )}
-              />
-              <Metric
                 label="Editions"
                 value={String(
                   relationship.editions_count,
+                )}
+              />
+              <Metric
+                label="Rounds"
+                value={String(
+                  relationship.rounds_count,
                 )}
               />
               <Metric
@@ -1425,112 +980,91 @@ function RelationshipDialog({
                   relationship.reciprocity_score,
                 )}
               />
+              <Metric
+                label="Audience uplift"
+                value={String(
+                  relationship.audience_uplift,
+                )}
+              />
+            </div>
+
+            <section>
+              <h4 className="mb-2 text-xs uppercase tracking-widest text-primary">
+                Why this score
+              </h4>
+
+              <ul className="space-y-1 text-sm">
+                {relationship.reasons.map(
+                  (reason, index) => (
+                    <li
+                      key={index}
+                      className="flex items-start justify-between gap-3"
+                    >
+                      <span>{reason.text}</span>
+                      <span
+                        className={
+                          reason.delta >= 0
+                            ? "tabular-nums text-amber-400"
+                            : "tabular-nums text-emerald-400"
+                        }
+                      >
+                        {reason.delta > 0 ? "+" : ""}
+                        {reason.delta}
+                      </span>
+                    </li>
+                  ),
+                )}
+              </ul>
             </section>
 
             <section>
               <h4 className="mb-2 text-xs uppercase tracking-widest text-primary">
-                Timeline
+                Timeline inside selected period
               </h4>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="uppercase text-muted-foreground">
+              <div className="max-h-72 overflow-y-auto rounded-xl border border-border/60">
+                <table className="w-full min-w-[620px] text-xs">
+                  <thead className="sticky top-0 bg-background/80 uppercase text-muted-foreground backdrop-blur">
                     <tr>
-                      <th className="py-1 pr-3 text-left">
+                      <th className="p-2 text-left">
                         Edition
                       </th>
-                      <th className="py-1 pr-3 text-left">
+                      <th className="p-2 text-left">
                         Round
                       </th>
-                      <th className="py-1 pr-3 text-right">
+                      <th className="p-2 text-right">
                         Points
                       </th>
-                      <th className="py-1 pr-3 text-right">
+                      <th className="p-2 text-right">
                         Rank
                       </th>
-                      <th className="py-1 pr-3 text-right">
-                        Audience avg
-                      </th>
-                      <th className="py-1 text-left">
-                        Ballot
+                      <th className="p-2 text-right">
+                        Audience
                       </th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {(
-                      relationship.timeline ??
-                      []
-                    ).map(
-                      (
-                        item: any,
-                        index: number,
-                      ) => (
+                    {relationship.timeline.map(
+                      (item, index) => (
                         <tr
-                          key={
-                            index
-                          }
+                          key={`${item.roundId}:${index}`}
                           className="border-t border-border/60"
                         >
-                          <td className="py-1 pr-3">
-                            {
-                              item.editionName
-                            }
+                          <td className="p-2">
+                            {item.editionName}
                           </td>
-
-                          <td className="py-1 pr-3">
-                            {
-                              item.roundName
-                            }
+                          <td className="p-2">
+                            {item.roundName}
                           </td>
-
-                          <td className="py-1 pr-3 text-right tabular-nums">
-                            {
-                              item.points
-                            }
-                            {item.points >=
-                              item.maxScore &&
-                            item.points >
-                              0
-                              ? " ★"
-                              : ""}
+                          <td className="p-2 text-right tabular-nums">
+                            {item.points}
                           </td>
-
-                          <td className="py-1 pr-3 text-right tabular-nums">
-                            {
-                              item.ballotRank ??
-                              "—"
-                            }
+                          <td className="p-2 text-right tabular-nums">
+                            {item.ballotRank ?? "—"}
                           </td>
-
-                          <td className="py-1 pr-3 text-right tabular-nums">
-                            {
-                              item.audienceAverage
-                            }
-                          </td>
-
-                          <td className="py-1">
-                            {item.status ===
-                            "deleted" ? (
-                              <Badge
-                                variant="destructive"
-                                className="text-[10px]"
-                              >
-                                deleted
-                                {item.deletionCategory
-                                  ? ` · ${item.deletionCategory}`
-                                  : ""}
-                              </Badge>
-                            ) : (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px]"
-                              >
-                                {
-                                  item.status
-                                }
-                              </Badge>
-                            )}
+                          <td className="p-2 text-right tabular-nums">
+                            {item.audienceAverage}
                           </td>
                         </tr>
                       ),
@@ -1540,120 +1074,312 @@ function RelationshipDialog({
               </div>
             </section>
 
-            {(detail.data
-              ?.moderationEvents ??
-              []).length > 0 ? (
-              <section>
-                <h4 className="mb-2 text-xs uppercase tracking-widest text-primary">
-                  Moderation
-                  history for this
-                  voter identity
-                </h4>
-
-                <ul className="space-y-1 text-xs text-muted-foreground">
-                  {detail.data.moderationEvents.map(
-                    (
-                      event: any,
-                    ) => (
-                      <li
-                        key={
-                          event.id
-                        }
-                      >
-                        {new Date(
-                          event.performed_at,
-                        ).toLocaleString()}{" "}
-                        ·{" "}
-                        {
-                          event.action
-                        }
-
-                        {event.target_country_code
-                          ? ` · target ${targetName(
-                              event.target_country_code,
-                            )}`
-                          : ""}
-
-                        {event.reason_category
-                          ? ` · ${event.reason_category}`
-                          : ""}
-
-                        {event.performed_by_username
-                          ? ` · ${event.performed_by_username}`
-                          : ""}
-                      </li>
-                    ),
-                  )}
-                </ul>
-              </section>
-            ) : null}
-
             <section className="space-y-2 border-t border-border/60 pt-4">
               <h4 className="text-xs uppercase tracking-widest text-primary">
                 Review decision
               </h4>
 
+              {!relationship.id ? (
+                <p className="text-xs text-amber-400">
+                  This pair does not yet have a stored all-history relationship
+                  row. The scoped analysis is still valid, but moderation review
+                  can only be attached after the all-history cache has been
+                  calculated at least once.
+                </p>
+              ) : null}
+
               <Select
                 value={status}
-                onValueChange={
-                  setStatus
-                }
+                onValueChange={setStatus}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
 
                 <SelectContent>
-                  {REVIEW_STATUSES.map(
-                    (
-                      item,
-                    ) => (
-                      <SelectItem
-                        key={
-                          item.value
-                        }
-                        value={
-                          item.value
-                        }
-                      >
-                        {
-                          item.label
-                        }
-                      </SelectItem>
-                    ),
-                  )}
+                  {REVIEW_STATUSES.map((item) => (
+                    <SelectItem
+                      key={item.value}
+                      value={item.value}
+                    >
+                      {item.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
               <Textarea
                 placeholder="Moderator note"
                 value={note}
-                onChange={(
-                  event,
-                ) =>
-                  setNote(
-                    event
-                      .target
-                      .value,
-                  )
+                onChange={(event) =>
+                  setNote(event.target.value)
                 }
               />
-
-              <Button
-                onClick={() =>
-                  save.mutate()
-                }
-                disabled={
-                  save.isPending
-                }
-              >
-                Save decision
-              </Button>
             </section>
           </div>
-        )}
+        ) : null}
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+
+          <Button
+            disabled={
+              !relationship?.id ||
+              review.isPending
+            }
+            onClick={() => review.mutate()}
+          >
+            Save decision
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SettingsPanel({
+  onSaved,
+}: {
+  onSaved: () => void;
+}) {
+  const qc = useQueryClient();
+  const getFn = useServerFn(getFriendVotingSettings);
+  const saveFn = useServerFn(saveFriendVotingSettings);
+
+  const [draft, setDraft] =
+    useState<FriendVotingSettings | null>(null);
+
+  const settings = useQuery({
+    queryKey: ["fv.settings"],
+    queryFn: async () => {
+      const value =
+        (await getFn()) as FriendVotingSettings;
+      setDraft(value);
+      return value;
+    },
+  });
+
+  const save = useMutation({
+    mutationFn: () =>
+      saveFn({
+        data: {
+          settings: draft!,
+        },
+      }),
+
+    onSuccess: () => {
+      toast.success("Detection settings saved");
+      void qc.invalidateQueries({
+        queryKey: ["fv.settings"],
+      });
+      onSaved();
+    },
+
+    onError: (error: any) =>
+      toast.error(
+        error?.message ??
+          "Could not save settings",
+      ),
+  });
+
+  if (settings.isLoading || !draft) {
+    return <Loading />;
+  }
+
+  return (
+    <div className="glass-strong space-y-5 rounded-2xl p-4 sm:p-5">
+      <div>
+        <h3 className="font-semibold">
+          Core thresholds
+        </h3>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <NumberField
+            label="Minimum shared opportunities"
+            value={draft.minOpportunities}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                minOpportunities: value,
+              })
+            }
+          />
+
+          <NumberField
+            label="Support frequency threshold"
+            value={draft.supportFrequencyThreshold}
+            step={0.05}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                supportFrequencyThreshold: value,
+              })
+            }
+          />
+
+          <NumberField
+            label="Top-three threshold"
+            value={draft.topThreeThreshold}
+            step={0.05}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                topThreeThreshold: value,
+              })
+            }
+          />
+
+          <NumberField
+            label="Maximum-score threshold"
+            value={draft.maximumScoreThreshold}
+            step={0.05}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                maximumScoreThreshold: value,
+              })
+            }
+          />
+
+          <NumberField
+            label="Preference-lift threshold"
+            value={draft.preferenceLiftThreshold}
+            step={0.1}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                preferenceLiftThreshold: value,
+              })
+            }
+          />
+
+          <NumberField
+            label="Audience-uplift threshold"
+            value={draft.audienceUpliftThreshold}
+            step={0.1}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                audienceUpliftThreshold: value,
+              })
+            }
+          />
+
+          <NumberField
+            label="Minimum editions"
+            value={draft.minEditions}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                minEditions: value,
+              })
+            }
+          />
+
+          <NumberField
+            label="Streak threshold"
+            value={draft.streakThreshold}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                streakThreshold: value,
+              })
+            }
+          />
+
+          <NumberField
+            label="Small-sample penalty"
+            value={draft.smallSamplePenalty}
+            onChange={(value) =>
+              setDraft({
+                ...draft,
+                smallSamplePenalty: value,
+              })
+            }
+          />
+        </div>
+      </div>
+
+      <label className="flex min-h-11 items-center gap-2 text-sm">
+        <Switch
+          checked={draft.ignoreTestBallots}
+          onCheckedChange={(checked) =>
+            setDraft({
+              ...draft,
+              ignoreTestBallots: checked,
+            })
+          }
+        />
+
+        Exclude test / administrative deletions from integrity evidence
+      </label>
+
+      <div>
+        <h3 className="font-semibold">
+          Signal weights
+        </h3>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {Object.entries(draft.weights).map(
+            ([key, value]) => (
+              <NumberField
+                key={key}
+                label={humanizeKey(key)}
+                value={value}
+                onChange={(next) =>
+                  setDraft({
+                    ...draft,
+                    weights: {
+                      ...draft.weights,
+                      [key]: next,
+                    },
+                  })
+                }
+              />
+            ),
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-semibold">
+          Risk bands
+        </h3>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {Object.entries(draft.riskBands).map(
+            ([key, value]) => (
+              <NumberField
+                key={key}
+                label={humanizeKey(key)}
+                value={value}
+                onChange={(next) =>
+                  setDraft({
+                    ...draft,
+                    riskBands: {
+                      ...draft.riskBands,
+                      [key]: next,
+                    },
+                  })
+                }
+              />
+            ),
+          )}
+        </div>
+      </div>
+
+      <Button
+        disabled={save.isPending}
+        onClick={() => save.mutate()}
+      >
+        Save settings
+      </Button>
+    </div>
   );
 }
 
@@ -1669,7 +1395,6 @@ function Stat({
       <p className="text-xs uppercase tracking-widest text-primary">
         {label}
       </p>
-
       <p className="mt-1 text-2xl font-semibold tabular-nums">
         {value}
       </p>
@@ -1689,383 +1414,9 @@ function Metric({
       <p className="text-[10px] uppercase text-muted-foreground">
         {label}
       </p>
-
       <p className="font-medium tabular-nums">
         {value}
       </p>
-    </div>
-  );
-}
-
-function SettingsPanel() {
-  const qc = useQueryClient();
-
-  const getFn = useServerFn(
-    getFriendVotingSettings,
-  );
-
-  const saveFn = useServerFn(
-    saveFriendVotingSettings,
-  );
-
-  const [
-    draft,
-    setDraft,
-  ] =
-    useState<FriendVotingSettings | null>(
-      null,
-    );
-
-  const settings = useQuery({
-    queryKey: ["fv.settings"],
-
-    queryFn: async () => {
-      const value =
-        (await getFn()) as FriendVotingSettings;
-
-      setDraft(value);
-      return value;
-    },
-  });
-
-  const save = useMutation({
-    mutationFn: () =>
-      saveFn({
-        data: {
-          settings:
-            draft!,
-        },
-      }) as Promise<any>,
-
-    onSuccess: () => {
-      toast.success(
-        "Detection settings saved · recalculate to apply",
-      );
-
-      void qc.invalidateQueries({
-        queryKey: [
-          "fv.settings",
-        ],
-      });
-    },
-
-    onError: (
-      error: any,
-    ) =>
-      toast.error(
-        error?.message ??
-          "Could not save settings",
-      ),
-  });
-
-  if (
-    settings.isLoading ||
-    !draft
-  ) {
-    return <TableSkeleton />;
-  }
-
-  const setTopLevelNumber = (
-    key: keyof FriendVotingSettings,
-    value: number,
-  ) => {
-    setDraft({
-      ...draft,
-      [key]: value,
-    } as FriendVotingSettings);
-  };
-
-  return (
-    <div className="glass-strong space-y-5 rounded-2xl p-4 sm:p-5">
-      <div>
-        <h3 className="font-semibold">
-          Core thresholds
-        </h3>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <NumberField
-            label="Minimum shared opportunities"
-            value={
-              draft.minOpportunities
-            }
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "minOpportunities",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Support frequency threshold"
-            value={
-              draft.supportFrequencyThreshold
-            }
-            step={0.05}
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "supportFrequencyThreshold",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Top-three threshold"
-            value={
-              draft.topThreeThreshold
-            }
-            step={0.05}
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "topThreeThreshold",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Maximum-score threshold"
-            value={
-              draft.maximumScoreThreshold
-            }
-            step={0.05}
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "maximumScoreThreshold",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Preference-lift threshold"
-            value={
-              draft.preferenceLiftThreshold
-            }
-            step={0.1}
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "preferenceLiftThreshold",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Audience-uplift threshold"
-            value={
-              draft.audienceUpliftThreshold
-            }
-            step={0.1}
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "audienceUpliftThreshold",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Minimum editions"
-            value={
-              draft.minEditions
-            }
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "minEditions",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Streak threshold"
-            value={
-              draft.streakThreshold
-            }
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "streakThreshold",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Small-sample penalty"
-            value={
-              draft.smallSamplePenalty
-            }
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "smallSamplePenalty",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Group internal share threshold"
-            value={
-              draft.cliqueInternalShareThreshold
-            }
-            step={0.05}
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "cliqueInternalShareThreshold",
-                value,
-              )
-            }
-          />
-
-          <NumberField
-            label="Group minimum edge risk"
-            value={
-              draft.cliqueMinEdgeRisk
-            }
-            onChange={(
-              value,
-            ) =>
-              setTopLevelNumber(
-                "cliqueMinEdgeRisk",
-                value,
-              )
-            }
-          />
-        </div>
-      </div>
-
-      <label className="flex items-center gap-2 text-sm">
-        <Switch
-          checked={
-            draft.ignoreTestBallots
-          }
-          onCheckedChange={(
-            value,
-          ) =>
-            setDraft({
-              ...draft,
-              ignoreTestBallots:
-                value,
-            })
-          }
-        />
-
-        Exclude test /
-        administrative
-        deletions from
-        integrity evidence
-      </label>
-
-      <div>
-        <h3 className="font-semibold">
-          Signal weights
-        </h3>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {Object.entries(
-            draft.weights,
-          ).map(
-            ([
-              key,
-              value,
-            ]) => (
-              <NumberField
-                key={key}
-                label={humanizeKey(
-                  key,
-                )}
-                value={
-                  value
-                }
-                onChange={(
-                  next,
-                ) =>
-                  setDraft({
-                    ...draft,
-                    weights: {
-                      ...draft.weights,
-                      [key]:
-                        next,
-                    },
-                  })
-                }
-              />
-            ),
-          )}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="font-semibold">
-          Risk bands
-        </h3>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {Object.entries(
-            draft.riskBands,
-          ).map(
-            ([
-              key,
-              value,
-            ]) => (
-              <NumberField
-                key={key}
-                label={humanizeKey(
-                  key,
-                )}
-                value={
-                  value
-                }
-                onChange={(
-                  next,
-                ) =>
-                  setDraft({
-                    ...draft,
-                    riskBands: {
-                      ...draft.riskBands,
-                      [key]:
-                        next,
-                    },
-                  })
-                }
-              />
-            ),
-          )}
-        </div>
-      </div>
-
-      <Button
-        onClick={() =>
-          save.mutate()
-        }
-        disabled={
-          save.isPending
-        }
-      >
-        Save settings
-      </Button>
     </div>
   );
 }
@@ -2079,9 +1430,7 @@ function NumberField({
   label: string;
   value: number;
   step?: number;
-  onChange: (
-    value: number,
-  ) => void;
+  onChange: (value: number) => void;
 }) {
   return (
     <div className="space-y-1.5">
@@ -2092,39 +1441,48 @@ function NumberField({
       <Input
         type="number"
         step={step}
-        value={String(
-          value,
-        )}
-        onChange={(
-          event,
-        ) =>
-          onChange(
-            Number(
-              event.target
-                .value,
-            ),
-          )
+        value={String(value)}
+        onChange={(event) =>
+          onChange(Number(event.target.value))
         }
       />
     </div>
   );
 }
 
-function humanizeKey(
-  value: string,
-) {
+function Loading() {
+  return (
+    <div className="glass rounded-2xl p-10 text-center text-sm text-muted-foreground">
+      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+      Analysing…
+    </div>
+  );
+}
+
+function Empty({
+  title,
+  body,
+}: {
+  title?: string;
+  body: string;
+}) {
+  return (
+    <div className="glass rounded-2xl p-10 text-center">
+      {title ? (
+        <h3 className="font-semibold">
+          {title}
+        </h3>
+      ) : null}
+      <p className="text-sm text-muted-foreground">
+        {body}
+      </p>
+    </div>
+  );
+}
+
+function humanizeKey(value: string) {
   return value
-    .replace(
-      /([a-z])([A-Z])/g,
-      "$1 $2",
-    )
-    .replace(
-      /_/g,
-      " ",
-    )
-    .replace(
-      /^./,
-      (letter) =>
-        letter.toUpperCase(),
-    );
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/^./, (letter) => letter.toUpperCase());
 }
