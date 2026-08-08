@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   AlertTriangle,
   CheckCircle2,
+  Download,
+  Image as ImageIcon,
   Loader2,
   Minus,
   Plus,
@@ -14,6 +16,7 @@ import {
   Vote,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toJpeg, toPng } from "html-to-image";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -742,16 +745,43 @@ function DoneCard({
   byCountryCode: Map<string, CountryShape>;
   byEntryKey: Map<string, ResolvedEntry>;
 }) {
+  const exportRef = useRef<HTMLDivElement | null>(null);
+
+  const [exporting, setExporting] = useState<
+    "png" | "jpg" | null
+  >(null);
+
   const homeCountry = confirmation
     ? byCountryCode.get(
         confirmation.home,
       )
     : null;
 
+  const sortedBreakdown = confirmation
+    ? [...confirmation.breakdown].sort(
+        (a, b) =>
+          b.points - a.points ||
+          getEntryDisplayName(
+            byEntryKey.get(a.entryKey),
+          ).localeCompare(
+            getEntryDisplayName(
+              byEntryKey.get(b.entryKey),
+            ),
+          ),
+      )
+    : [];
+
+  const totalPoints =
+    sortedBreakdown.reduce(
+      (sum, item) =>
+        sum + item.points,
+      0,
+    );
+
   const share = async () => {
     if (!confirmation) return;
 
-    const lines = confirmation.breakdown
+    const lines = sortedBreakdown
       .map((item) => {
         const entry =
           byEntryKey.get(
@@ -802,96 +832,334 @@ function DoneCard({
     }
   };
 
+  const buildFileName = (
+    extension: "png" | "jpg",
+  ) => {
+    const base = [
+      editionName,
+      roundName,
+      "vote-overview",
+    ]
+      .filter(Boolean)
+      .join("-")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    return `${base || "solaris-vote-overview"}.${extension}`;
+  };
+
+  const triggerDownload = (
+    dataUrl: string,
+    fileName: string,
+  ) => {
+    const link =
+      document.createElement("a");
+
+    link.href = dataUrl;
+    link.download = fileName;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const exportImage = async (
+    format: "png" | "jpg",
+  ) => {
+    if (
+      !confirmation ||
+      !exportRef.current ||
+      exporting
+    ) {
+      return;
+    }
+
+    try {
+      setExporting(format);
+
+      /*
+       * This is deliberately a rendered copy of the visible vote card rather
+       * than a screenshot of the whole page. The action buttons therefore do
+       * not end up inside the downloaded image.
+       *
+       * cacheBust helps when country flags / entry artwork are remote images.
+       * A high pixel ratio keeps text and flags sharp when shared on Instagram.
+       */
+      const options = {
+        cacheBust: true,
+        pixelRatio: 3,
+        backgroundColor: "#07122f",
+      };
+
+      const dataUrl =
+        format === "png"
+          ? await toPng(
+              exportRef.current,
+              options,
+            )
+          : await toJpeg(
+              exportRef.current,
+              {
+                ...options,
+                quality: 0.95,
+              },
+            );
+
+      triggerDownload(
+        dataUrl,
+        buildFileName(format),
+      );
+
+      toast.success(
+        `${format.toUpperCase()} vote overview created`,
+      );
+    } catch (error) {
+      console.error(
+        "Vote overview export failed",
+        error,
+      );
+
+      toast.error(
+        "Could not create the vote image. Try PNG if JPG fails.",
+      );
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
-    <section className="glass-strong mx-auto max-w-xl space-y-5 rounded-2xl p-6 text-center animate-pop-in sm:p-8">
-      <div className="bg-hero shadow-glow mx-auto grid h-14 w-14 place-items-center rounded-2xl">
-        <CheckCircle2 className="h-7 w-7 text-primary-foreground" />
-      </div>
+    <section className="mx-auto max-w-xl space-y-4 animate-pop-in">
+      <div className="glass-strong space-y-5 rounded-2xl p-6 text-center sm:p-8">
+        <div className="bg-hero shadow-glow mx-auto grid h-14 w-14 place-items-center rounded-2xl">
+          <CheckCircle2 className="h-7 w-7 text-primary-foreground" />
+        </div>
 
-      <div className="space-y-1">
-        <p className="text-xs uppercase tracking-widest text-primary">
-          {editionName
-            ? `${editionName} · `
-            : ""}
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-widest text-primary">
+            {editionName
+              ? `${editionName} · `
+              : ""}
 
-          {roundName}
-        </p>
+            {roundName}
+          </p>
 
-        <h2 className="text-2xl font-bold">
-          Your vote is in
-        </h2>
+          <h2 className="text-2xl font-bold">
+            Your vote is in
+          </h2>
 
-        <p className="text-sm text-muted-foreground">
-          Thank you for taking part in the televote. Results are revealed live
-          on stage.
-        </p>
+          <p className="text-sm text-muted-foreground">
+            Thank you for taking part in the televote. Results are revealed later.
+          </p>
+        </div>
       </div>
 
       {confirmation ? (
-        <div className="space-y-3 text-left">
-          <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-            <span>
-              {confirmation.username}
-            </span>
+        <>
+          <div
+            ref={exportRef}
+            className="overflow-hidden rounded-[30px] border border-white/20 p-[1px] shadow-2xl"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(255,255,255,0.48), rgba(255,255,255,0.08) 42%, rgba(79,235,255,0.28) 100%)",
+            }}
+          >
+            <div
+              className="relative overflow-hidden rounded-[29px] px-5 py-6 text-left sm:px-6"
+              style={{
+                background:
+                  "radial-gradient(circle at 15% 0%, rgba(105,229,255,0.23), transparent 38%), radial-gradient(circle at 100% 95%, rgba(57,210,198,0.18), transparent 42%), linear-gradient(150deg, #101842 0%, #0b2152 52%, #063c59 100%)",
+              }}
+            >
+              <div
+                className="pointer-events-none absolute inset-0 opacity-50"
+                style={{
+                  background:
+                    "linear-gradient(115deg, rgba(255,255,255,0.12), transparent 26%, transparent 64%, rgba(255,255,255,0.07))",
+                }}
+              />
 
-            <span aria-hidden>·</span>
+              <div className="relative">
+                <div className="text-center">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#76f0e1]">
+                    Solaris Song Contest
+                  </p>
 
-            <CountryFlag
-              country={homeCountry}
-              size={16}
-            />
+                  <h3 className="mt-2 text-2xl font-bold text-white">
+                    My televote
+                  </h3>
 
-            <span>
-              {countryName(homeCountry)}
-            </span>
+                  <p className="mt-1 text-sm text-white/70">
+                    {editionName
+                      ? `${editionName} · `
+                      : ""}
+                    {roundName}
+                  </p>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-white/12 bg-white/[0.07] px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {confirmation.username}
+                    </p>
+
+                    <div className="mt-0.5 inline-flex max-w-full items-center gap-1.5 text-xs text-white/65">
+                      <CountryFlag
+                        country={homeCountry}
+                        size={16}
+                      />
+
+                      <span className="truncate">
+                        {countryName(
+                          homeCountry,
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 text-right">
+                    <p className="text-xl font-bold tabular-nums text-white">
+                      {totalPoints}
+                    </p>
+
+                    <p className="text-[9px] uppercase tracking-[0.18em] text-white/55">
+                      total points
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {sortedBreakdown.map(
+                    (item, index) => {
+                      const entry =
+                        byEntryKey.get(
+                          item.entryKey,
+                        );
+
+                      return (
+                        <div
+                          key={
+                            item.entryKey
+                          }
+                          className="grid grid-cols-[28px_30px_minmax(0,1fr)_54px] items-center gap-2 rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5"
+                        >
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80">
+                            {index + 1}
+                          </div>
+
+                          <EntryAvatar
+                            entry={
+                              entry
+                            }
+                            size={28}
+                          />
+
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-white">
+                              {getEntryDisplayName(
+                                entry,
+                              )}
+                            </p>
+
+                            {entry?.subtitle ? (
+                              <p className="mt-0.5 truncate text-[10px] text-white/50">
+                                {
+                                  entry.subtitle
+                                }
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="text-right">
+                            <p className="text-lg font-bold leading-none tabular-nums text-[#76f0e1]">
+                              {
+                                item.points
+                              }
+                            </p>
+
+                            <p className="mt-1 text-[8px] uppercase tracking-[0.15em] text-white/45">
+                              pts
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+
+                <div className="mt-5 border-t border-white/10 pt-3 text-center">
+                  <p className="text-[9px] uppercase tracking-[0.22em] text-white/45">
+                    Solaris Televote
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <ul className="space-y-1.5">
-            {confirmation.breakdown.map(
-              (item) => {
-                const entry =
-                  byEntryKey.get(
-                    item.entryKey,
-                  );
+          <div className="glass-strong space-y-3 rounded-2xl p-4">
+            <p className="text-center text-xs text-muted-foreground">
+              Save your vote overview as an image or share the text version.
+            </p>
 
-                return (
-                  <li
-                    key={item.entryKey}
-                    className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card/60 px-3 py-2"
-                  >
-                    <EntryAvatar
-                      entry={entry}
-                      size={28}
-                    />
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                className="h-11"
+                disabled={
+                  exporting !== null
+                }
+                onClick={() =>
+                  exportImage("png")
+                }
+              >
+                {exporting ===
+                "png" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
 
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {getEntryDisplayName(
-                        entry,
-                      )}
-                    </span>
+                PNG
+              </Button>
 
-                    <span className="font-bold tabular-nums text-primary">
-                      {item.points}
-                    </span>
-                  </li>
-                );
-              },
-            )}
-          </ul>
+              <Button
+                variant="outline"
+                className="h-11"
+                disabled={
+                  exporting !== null
+                }
+                onClick={() =>
+                  exportImage("jpg")
+                }
+              >
+                {exporting ===
+                "jpg" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ImageIcon className="h-4 w-4" />
+                )}
+
+                JPG
+              </Button>
+            </div>
+
+            <Button
+              variant="outline"
+              className="h-11 w-full"
+              onClick={share}
+            >
+              <Share2 className="h-4 w-4" />
+
+              Share my vote
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="glass-strong rounded-2xl p-5 text-center text-sm text-muted-foreground">
+          This browser already recorded a vote for this round, so the previous
+          ballot overview is not available on this device.
         </div>
-      ) : null}
-
-      {confirmation ? (
-        <Button
-          variant="outline"
-          className="h-11 w-full"
-          onClick={share}
-        >
-          <Share2 className="h-4 w-4" />
-
-          Share my vote
-        </Button>
-      ) : null}
+      )}
     </section>
   );
 }
