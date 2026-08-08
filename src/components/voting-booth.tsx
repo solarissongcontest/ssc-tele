@@ -27,7 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CountryFlag, countryName } from "@/components/country-flag";
+import {
+  CountryFlag,
+  countryName,
+  NO_FLAG_PLACEHOLDER_URL,
+} from "@/components/country-flag";
 import { EntryAvatar } from "@/components/entry-avatar";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -140,6 +144,7 @@ export function VotingBooth({
   selfVotingMode?: SelfVotingMode | string;
 }) {
   const storedConfirmation = readStoredConfirmation(roundId);
+
   const alreadyVoted =
     hasSubmittedRound(roundId) || Boolean(storedConfirmation);
 
@@ -151,6 +156,7 @@ export function VotingBooth({
   const [home, setHome] = useState("");
   const [points, setPoints] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
+
   const [confirmation, setConfirmation] = useState<Confirmation | null>(
     storedConfirmation,
   );
@@ -174,7 +180,10 @@ export function VotingBooth({
     staleTime: 60_000,
   });
 
-  const sortedEntries = useMemo(() => sortEntries(entries), [entries]);
+  const sortedEntries = useMemo(
+    () => sortEntries(entries),
+    [entries],
+  );
 
   const byEntryKey = useMemo(
     () => entryMap(sortedEntries),
@@ -278,6 +287,7 @@ export function VotingBooth({
 
       markRoundSubmitted(roundId);
       storeConfirmation(roundId, receipt);
+
       setConfirmation(receipt);
       setStage("done");
 
@@ -428,16 +438,20 @@ export function VotingBooth({
     delta: number,
   ) => {
     setPoints((previous) => {
-      const current = previous[entryKey] ?? 0;
-      let next = current + delta;
+      const current =
+        previous[entryKey] ?? 0;
+
+      let next =
+        current + delta;
 
       if (next < 0) next = 0;
       if (next > MAX_PER) next = MAX_PER;
 
-      const currentTotal = Object.values(previous).reduce(
-        (sum, value) => sum + value,
-        0,
-      );
+      const currentTotal =
+        Object.values(previous).reduce(
+          (sum, value) => sum + value,
+          0,
+        );
 
       const otherTotal =
         currentTotal - current;
@@ -598,6 +612,7 @@ export function VotingBooth({
           onClick={() => setPoints({})}
         >
           <RotateCcw className="h-4 w-4" />
+
           <span className="hidden sm:inline">
             Reset
           </span>
@@ -606,8 +621,7 @@ export function VotingBooth({
 
       {visibleEntries.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          No {participantNoun} match “
-          {search}”.
+          No {participantNoun} match “{search}”.
         </p>
       ) : null}
 
@@ -645,9 +659,11 @@ export function VotingBooth({
 
                 <div className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
                   #{entry.display_order}
+
                   {entry.subtitle
                     ? ` · ${entry.subtitle}`
                     : ""}
+
                   {blockedSelfVote
                     ? " · your entry"
                     : ""}
@@ -764,14 +780,8 @@ function DoneCard({
   roundName: string;
   editionName?: string | null;
   confirmation: Confirmation | null;
-  byCountryCode: Map<
-    string,
-    CountryShape
-  >;
-  byEntryKey: Map<
-    string,
-    ResolvedEntry
-  >;
+  byCountryCode: Map<string, CountryShape>;
+  byEntryKey: Map<string, ResolvedEntry>;
 }) {
   const [exporting, setExporting] =
     useState<
@@ -785,30 +795,31 @@ function DoneCard({
     : null;
 
   const sortedBreakdown = confirmation
-    ? [
-        ...confirmation.breakdown,
-      ].sort((a, b) => {
-        const aName =
-          getEntryDisplayName(
-            byEntryKey.get(
-              a.entryKey,
-            ),
-          );
+    ? [...confirmation.breakdown].sort(
+        (a, b) => {
+          const aName =
+            getEntryDisplayName(
+              byEntryKey.get(
+                a.entryKey,
+              ),
+            );
 
-        const bName =
-          getEntryDisplayName(
-            byEntryKey.get(
-              b.entryKey,
-            ),
-          );
+          const bName =
+            getEntryDisplayName(
+              byEntryKey.get(
+                b.entryKey,
+              ),
+            );
 
-        return (
-          b.points - a.points ||
-          aName.localeCompare(
-            bName,
-          )
-        );
-      })
+          return (
+            b.points -
+              a.points ||
+            aName.localeCompare(
+              bName,
+            )
+          );
+        },
+      )
     : [];
 
   const totalPoints =
@@ -869,7 +880,7 @@ function DoneCard({
         "Vote summary copied to clipboard",
       );
     } catch {
-      // Closing the share sheet is not an error.
+      // Closing share sheet is not an error.
     }
   };
 
@@ -907,7 +918,12 @@ function DoneCard({
     );
 
     context.beginPath();
-    context.moveTo(x + r, y);
+
+    context.moveTo(
+      x + r,
+      y,
+    );
+
     context.lineTo(
       x + width - r,
       y,
@@ -965,8 +981,9 @@ function DoneCard({
     maxWidth: number,
   ) => {
     if (
-      context.measureText(text)
-        .width <= maxWidth
+      context.measureText(
+        text,
+      ).width <= maxWidth
     ) {
       return text;
     }
@@ -980,14 +997,41 @@ function DoneCard({
       ).width > maxWidth
     ) {
       output =
-        output.slice(0, -1);
+        output.slice(
+          0,
+          -1,
+        );
     }
 
     return `${output}…`;
   };
 
+  const loadCanvasImage = async (
+    src: string,
+  ): Promise<HTMLImageElement | null> => {
+    return await new Promise(
+      (resolve) => {
+        const image =
+          new Image();
+
+        image.crossOrigin =
+          "anonymous";
+
+        image.onload =
+          () =>
+            resolve(image);
+
+        image.onerror =
+          () =>
+            resolve(null);
+
+        image.src = src;
+      },
+    );
+  };
+
   const createVoteCanvas =
-    () => {
+    async () => {
       if (!confirmation) {
         return null;
       }
@@ -1004,7 +1048,9 @@ function DoneCard({
       canvas.height = height;
 
       const ctx =
-        canvas.getContext("2d");
+        canvas.getContext(
+          "2d",
+        );
 
       if (!ctx) return null;
 
@@ -1061,7 +1107,8 @@ function DoneCard({
         "rgba(118,240,225,0)",
       );
 
-      ctx.fillStyle = glow;
+      ctx.fillStyle =
+        glow;
 
       ctx.fillRect(
         0,
@@ -1189,12 +1236,15 @@ function DoneCard({
         330,
       );
 
-      const listTop = 395;
+      const listTop =
+        395;
+
       const listBottom =
         1195;
 
       const availableHeight =
-        listBottom - listTop;
+        listBottom -
+        listTop;
 
       const rowGap = 10;
 
@@ -1219,156 +1269,258 @@ function DoneCard({
           ),
         );
 
-      sortedBreakdown.forEach(
-        (item, index) => {
-          const entry =
-            byEntryKey.get(
-              item.entryKey,
-            );
+      for (
+        let index = 0;
+        index <
+        sortedBreakdown.length;
+        index += 1
+      ) {
+        const item =
+          sortedBreakdown[index];
 
-          const y =
-            listTop +
-            index *
-              (rowHeight +
-                rowGap);
+        const entry =
+          byEntryKey.get(
+            item.entryKey,
+          );
+
+        const y =
+          listTop +
+          index *
+            (rowHeight +
+              rowGap);
+
+        roundRect(
+          ctx,
+          70,
+          y,
+          940,
+          rowHeight,
+          Math.min(
+            24,
+            rowHeight / 2,
+          ),
+        );
+
+        ctx.fillStyle =
+          "rgba(0,0,0,0.13)";
+
+        ctx.fill();
+
+        const centerY =
+          y +
+          rowHeight / 2;
+
+        ctx.textAlign =
+          "center";
+
+        ctx.fillStyle =
+          "rgba(255,255,255,0.18)";
+
+        ctx.beginPath();
+
+        ctx.arc(
+          112,
+          centerY,
+          Math.min(
+            21,
+            rowHeight *
+              0.31,
+          ),
+          0,
+          Math.PI * 2,
+        );
+
+        ctx.fill();
+
+        ctx.fillStyle =
+          "rgba(255,255,255,0.82)";
+
+        ctx.font = `700 ${Math.max(
+          16,
+          Math.min(
+            22,
+            rowHeight *
+              0.3,
+          ),
+        )}px Arial, sans-serif`;
+
+        ctx.fillText(
+          String(
+            index + 1,
+          ),
+          112,
+          centerY + 7,
+        );
+
+        let imageUrl =
+          NO_FLAG_PLACEHOLDER_URL;
+
+        if (
+          entry?.entry_type ===
+          "country"
+        ) {
+          imageUrl =
+            entry.country
+              ?.flag_url ||
+            NO_FLAG_PLACEHOLDER_URL;
+        } else if (
+          entry?.entry_type ===
+            "custom" &&
+          entry.image_url
+        ) {
+          imageUrl =
+            entry.image_url;
+        }
+
+        const image =
+          await loadCanvasImage(
+            imageUrl,
+          );
+
+        const imageWidth =
+          entry?.entry_type ===
+          "custom"
+            ? 44
+            : 50;
+
+        const imageHeight =
+          entry?.entry_type ===
+          "custom"
+            ? 44
+            : 33;
+
+        const imageX =
+          146;
+
+        const imageY =
+          centerY -
+          imageHeight / 2;
+
+        if (image) {
+          ctx.save();
 
           roundRect(
             ctx,
-            70,
-            y,
-            940,
-            rowHeight,
-            Math.min(
-              24,
-              rowHeight / 2,
-            ),
+            imageX,
+            imageY,
+            imageWidth,
+            imageHeight,
+            entry?.entry_type ===
+            "custom"
+              ? 8
+              : 4,
           );
 
-          ctx.fillStyle =
-            "rgba(0,0,0,0.13)";
+          ctx.clip();
 
-          ctx.fill();
+          const sourceRatio =
+            image.naturalWidth /
+            image.naturalHeight;
 
-          const centerY =
-            y +
-            rowHeight / 2;
+          const targetRatio =
+            imageWidth /
+            imageHeight;
 
-          ctx.textAlign =
-            "center";
+          let sx = 0;
+          let sy = 0;
 
-          ctx.fillStyle =
-            "rgba(255,255,255,0.18)";
+          let sw =
+            image.naturalWidth;
 
-          ctx.beginPath();
+          let sh =
+            image.naturalHeight;
 
-          ctx.arc(
-            112,
-            centerY,
-            Math.min(
-              21,
-              rowHeight *
-                0.31,
-            ),
-            0,
-            Math.PI * 2,
+          if (
+            sourceRatio >
+            targetRatio
+          ) {
+            sw =
+              image.naturalHeight *
+              targetRatio;
+
+            sx =
+              (image.naturalWidth -
+                sw) /
+              2;
+          } else if (
+            sourceRatio <
+            targetRatio
+          ) {
+            sh =
+              image.naturalWidth /
+              targetRatio;
+
+            sy =
+              (image.naturalHeight -
+                sh) /
+              2;
+          }
+
+          ctx.drawImage(
+            image,
+            sx,
+            sy,
+            sw,
+            sh,
+            imageX,
+            imageY,
+            imageWidth,
+            imageHeight,
           );
 
-          ctx.fill();
+          ctx.restore();
+        }
 
-          ctx.fillStyle =
-            "rgba(255,255,255,0.82)";
+        ctx.textAlign =
+          "left";
 
-          ctx.font = `700 ${Math.max(
-            16,
-            Math.min(
-              22,
-              rowHeight *
-                0.3,
+        ctx.fillStyle =
+          "#ffffff";
+
+        ctx.font = `600 ${Math.max(
+          17,
+          Math.min(
+            26,
+            rowHeight *
+              0.34,
+          ),
+        )}px Arial, sans-serif`;
+
+        ctx.fillText(
+          fitText(
+            ctx,
+            getEntryDisplayName(
+              entry,
             ),
-          )}px Arial, sans-serif`;
+            590,
+          ),
+          218,
+          centerY + 8,
+        );
 
-          ctx.fillText(
-            String(
-              index + 1,
-            ),
-            112,
-            centerY + 7,
-          );
+        ctx.textAlign =
+          "right";
 
-          const countryFlag =
-            entry?.country
-              ?.flag ?? "";
+        ctx.fillStyle =
+          "#76f0e1";
 
-          ctx.font = `${Math.max(
-            18,
-            Math.min(
-              31,
-              rowHeight *
-                0.42,
-            ),
-          )}px Arial, sans-serif`;
+        ctx.font = `700 ${Math.max(
+          20,
+          Math.min(
+            34,
+            rowHeight *
+              0.45,
+          ),
+        )}px Arial, sans-serif`;
 
-          ctx.fillText(
-            countryFlag ||
-              (entry?.entry_type ===
-              "custom"
-                ? "✦"
-                : "•"),
-            170,
-            centerY + 9,
-          );
-
-          ctx.textAlign =
-            "left";
-
-          ctx.fillStyle =
-            "#ffffff";
-
-          ctx.font = `600 ${Math.max(
-            17,
-            Math.min(
-              26,
-              rowHeight *
-                0.34,
-            ),
-          )}px Arial, sans-serif`;
-
-          ctx.fillText(
-            fitText(
-              ctx,
-              getEntryDisplayName(
-                entry,
-              ),
-              600,
-            ),
-            210,
-            centerY + 8,
-          );
-
-          ctx.textAlign =
-            "right";
-
-          ctx.fillStyle =
-            "#76f0e1";
-
-          ctx.font = `700 ${Math.max(
-            20,
-            Math.min(
-              34,
-              rowHeight *
-                0.45,
-            ),
-          )}px Arial, sans-serif`;
-
-          ctx.fillText(
-            String(
-              item.points,
-            ),
-            945,
-            centerY + 9,
-          );
-        },
-      );
+        ctx.fillText(
+          String(
+            item.points,
+          ),
+          945,
+          centerY + 9,
+        );
+      }
 
       ctx.textAlign =
         "center";
@@ -1449,7 +1601,7 @@ function DoneCard({
       );
 
       const canvas =
-        createVoteCanvas();
+        await createVoteCanvas();
 
       if (!canvas) {
         throw new Error(
@@ -1513,9 +1665,12 @@ function DoneCard({
           "a",
         );
 
-      link.href = url;
+      link.href =
+        url;
+
       link.download =
         fileName;
+
       link.rel =
         "noopener";
 
@@ -1743,8 +1898,8 @@ function DoneCard({
 
           <div className="glass-strong space-y-3 rounded-2xl p-4">
             <p className="text-center text-xs text-muted-foreground">
-              On iPhone, PNG/JPG opens the share sheet so the voter can choose
-              Save Image. On desktop it downloads the file directly.
+              PNG and JPG use the actual Solaris flag images and custom entry
+              artwork whenever they are available.
             </p>
 
             <div className="grid grid-cols-2 gap-2">
