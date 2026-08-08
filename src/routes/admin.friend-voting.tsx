@@ -1,1488 +1,1328 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import {
-  Heart,
-  History,
-  Loader2,
-  RefreshCcw,
-  Search,
-  Sliders,
-  Users,
-} from "lucide-react";
-import { toast } from "sonner";
+import { createHash } from "node:crypto";
 
-import { AdminShell } from "@/components/admin-shell";
-import { AnalysisScopePicker } from "@/components/analysis-scope-picker";
-import { CountryFlag } from "@/components/country-flag";
-import { EntryAvatar } from "@/components/entry-avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { createServerFn } from "@tanstack/react-start";
+import { useSession } from "@tanstack/react-start/server";
+
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+  analyse,
+  mergeSettings,
+  type Ballot,
+  type ModerationHistoryRow,
+  type RoundInfo,
+} from "@/lib/friend-voting-math";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { useEntryKeyCatalog } from "@/hooks/use-entry-key-catalog";
-import { useAllCountries } from "@/hooks/use-round-results";
-import {
-  getScopedFriendVotingAnalysis,
-  type ScopedFriendRelationship,
-} from "@/lib/analysis-scope.functions";
-import {
-  DEFAULT_ANALYSIS_SCOPE,
-  analysisScopeKey,
+  validateAnalysisScope,
   type AnalysisScope,
 } from "@/lib/analysis-scope";
-import { downloadCSV } from "@/lib/export";
-import {
-  getFriendVotingSettings,
-  saveFriendVotingSettings,
-  setRelationshipReview,
-} from "@/lib/friend-voting.functions";
-import type { FriendVotingSettings } from "@/lib/friend-voting-math";
-import {
-  entryMap,
-  getEntryDisplayName,
-} from "@/lib/round-entries";
 
-export const Route = createFileRoute("/admin/friend-voting")({
-  head: () => ({
-    meta: [
-      {
-        title: "Friend-Voting Analysis — Solaris Admin",
-      },
-    ],
-  }),
-  component: FriendVotingPage,
-});
+type SessionData = {
+  token?: string;
+};
 
-const REVIEW_STATUSES = [
-  { value: "new", label: "New" },
-  { value: "under_review", label: "Under review" },
-  { value: "watchlist", label: "Watchlist" },
-  { value: "confirmed", label: "Confirmed friend voting" },
-  { value: "legitimate", label: "Legitimate" },
-  { value: "dismissed", label: "Dismissed" },
-];
+type Actor = {
+  id: string;
+  username: string;
+  is_super_admin: boolean;
+};
 
-function riskClass(score: number) {
-  if (score >= 80) {
-    return "bg-destructive text-destructive-foreground";
+type ScopeRound = {
+  id: string;
+  name: string;
+  edition_id: string;
+  edition_name: string;
+  status: string;
+  opened_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  entry_keys: string[];
+};
+
+type ScopeEdition = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+const SESSION_COOKIE_NAME = "solaris-admin";
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+function sessionConfig() {
+  const password = process.env.ADMIN_SESSION_SECRET;
+
+  if (!password) {
+    throw new Error("ADMIN_SESSION_SECRET is not set");
   }
 
-  if (score >= 65) {
-    return "bg-amber-500/25 text-amber-400";
-  }
-
-  if (score >= 50) {
-    return "bg-primary/25 text-primary";
-  }
-
-  return "bg-muted text-muted-foreground";
+  return {
+    password,
+    name: SESSION_COOKIE_NAME,
+    maxAge: SESSION_TTL_SECONDS,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax" as const,
+      secure: true,
+      path: "/",
+    },
+  };
 }
 
-function FriendVotingPage() {
-  const scopedFn = useServerFn(getScopedFriendVotingAnalysis);
-  const { data: countries = [] } = useAllCountries();
+function sha256(value: string) {
+  return createHash("sha256")
+    .update(value, "utf8")
+    .digest("hex");
+}
 
-  const [scope, setScope] =
-    useState<AnalysisScope>(DEFAULT_ANALYSIS_SCOPE);
+async function requireAdmin(): Promise<Actor> {
+  const session = await useSession<SessionData>(sessionConfig());
+  const token = session.data.token;
 
-  const [search, setSearch] = useState("");
-  const [minRisk, setMinRisk] = useState(0);
-  const [reviewStatus, setReviewStatus] =
-    useState("all");
-  const [onlyRepeated, setOnlyRepeated] =
-    useState(false);
+  if (!token) throw new Error("Not authenticated");
 
-  const [selected, setSelected] =
-    useState<ScopedFriendRelationship | null>(null);
-
-  const scoped = useQuery({
-    queryKey: [
-      "scoped-friend-voting",
-      analysisScopeKey(scope),
-    ],
-    queryFn: () =>
-      scopedFn({
-        data: { scope },
-      }),
-  });
-
-  const relationships = scoped.data?.relationships ?? [];
-  const groups = scoped.data?.groups ?? [];
-  const moderationEvents =
-    scoped.data?.moderationEvents ?? [];
-
-  const targetKeys = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          [
-            ...relationships.map(
-              (row) => row.target_country_code,
-            ),
-            ...moderationEvents
-              .map(
-                (event: any) =>
-                  event.target_country_code,
-              )
-              .filter(Boolean),
-          ].filter(Boolean),
-        ),
-      ),
-    [relationships, moderationEvents],
+  const { supabaseAdmin } = await import(
+    "@/integrations/supabase/client.server"
   );
 
-  const { data: targetEntries = [] } =
-    useEntryKeyCatalog(targetKeys);
+  const { data: sessionRow, error: sessionError } = await supabaseAdmin
+    .from("admin_sessions" as any)
+    .select("admin_id")
+    .eq("token_hash", sha256(token))
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
 
-  const byEntryKey = useMemo(
-    () => entryMap(targetEntries),
-    [targetEntries],
+  if (sessionError) throw new Error(sessionError.message);
+  if (!sessionRow) throw new Error("Session expired");
+
+  const { data: adminRow, error: adminError } = await supabaseAdmin
+    .from("admin_accounts" as any)
+    .select("id,username,is_super_admin,disabled")
+    .eq("id", (sessionRow as any).admin_id)
+    .maybeSingle();
+
+  if (adminError) throw new Error(adminError.message);
+
+  if (!adminRow || (adminRow as any).disabled) {
+    throw new Error("Not authenticated");
+  }
+
+  return {
+    id: String((adminRow as any).id),
+    username: String((adminRow as any).username),
+    is_super_admin: Boolean((adminRow as any).is_super_admin),
+  };
+}
+
+async function resolveScope(
+  scopeInput: AnalysisScope,
+): Promise<{
+  editions: ScopeEdition[];
+  rounds: ScopeRound[];
+}> {
+  const scope = validateAnalysisScope(scopeInput);
+
+  const { supabaseAdmin } = await import(
+    "@/integrations/supabase/client.server"
   );
 
-  const byCountryCode = useMemo(() => {
-    const map = new Map<string, any>();
+  const [
+    { data: editionRows, error: editionError },
+    { data: roundRows, error: roundError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("editions" as any)
+      .select("id,name,created_at")
+      .order("created_at", { ascending: true }),
 
-    for (const country of countries) {
-      map.set(country.code, country);
+    supabaseAdmin
+      .from("rounds" as any)
+      .select(
+        "id,name,edition_id,status,opened_at,closed_at,created_at,editions(name),round_entries(entry_key)",
+      )
+      .order("created_at", { ascending: true }),
+  ]);
+
+  if (editionError) throw new Error(editionError.message);
+  if (roundError) throw new Error(roundError.message);
+
+  const editions: ScopeEdition[] = ((editionRows ?? []) as any[]).map(
+    (edition) => ({
+      id: String(edition.id),
+      name: String(edition.name),
+      created_at: String(edition.created_at),
+    }),
+  );
+
+  const allRounds: ScopeRound[] = ((roundRows ?? []) as any[]).map(
+    (round) => ({
+      id: String(round.id),
+      name: String(round.name),
+      edition_id: String(round.edition_id),
+      edition_name: String(round.editions?.name ?? "Unknown edition"),
+      status: String(round.status ?? "draft"),
+      opened_at: round.opened_at ?? null,
+      closed_at: round.closed_at ?? null,
+      created_at: String(round.created_at),
+      entry_keys: (round.round_entries ?? [])
+        .map((entry: any) => String(entry.entry_key ?? ""))
+        .filter(Boolean),
+    }),
+  );
+
+  let selectedRounds: ScopeRound[];
+
+  if (scope.mode === "all_editions") {
+    selectedRounds = allRounds;
+  } else if (scope.mode === "round") {
+    selectedRounds = allRounds.filter(
+      (round) => round.id === scope.roundId,
+    );
+  } else if (scope.mode === "edition") {
+    selectedRounds = allRounds.filter(
+      (round) => round.edition_id === scope.editionId,
+    );
+  } else {
+    const fromIndex = editions.findIndex(
+      (edition) => edition.id === scope.fromEditionId,
+    );
+    const toIndex = editions.findIndex(
+      (edition) => edition.id === scope.toEditionId,
+    );
+
+    if (fromIndex < 0 || toIndex < 0) {
+      throw new Error("Edition range could not be resolved");
     }
 
-    return map;
-  }, [countries]);
+    const start = Math.min(fromIndex, toIndex);
+    const end = Math.max(fromIndex, toIndex);
 
-  const voterName = (countryCode: string) =>
-    byCountryCode.get(countryCode)?.name ??
-    countryCode;
+    const selectedEditionIds = new Set(
+      editions.slice(start, end + 1).map((edition) => edition.id),
+    );
 
-  const targetName = (entryKey: string) => {
-    const entry = byEntryKey.get(entryKey);
+    selectedRounds = allRounds.filter((round) =>
+      selectedEditionIds.has(round.edition_id),
+    );
+  }
 
-    return entry
-      ? getEntryDisplayName(entry)
-      : entryKey;
+  const selectedEditionIds = new Set(
+    selectedRounds.map((round) => round.edition_id),
+  );
+
+  return {
+    editions: editions.filter((edition) =>
+      selectedEditionIds.has(edition.id),
+    ),
+    rounds: selectedRounds,
   };
+}
 
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+type RawSubmission = {
+  id: string;
+  round_id: string;
+  country_code: string;
+  username: string;
+  username_normalized: string;
+  created_at: string;
+  status: string | null;
+  deletion_category: string | null;
+  risk_score: number;
+  ip_country: string | null;
+  is_vpn: boolean;
+  ip_hash: string | null;
+  fingerprint_hash: string | null;
+  device_token_hash: string | null;
+  vote_entries: {
+    target_country_code: string;
+    points: number;
+  }[];
+};
 
-    return relationships.filter((row) => {
-      if (row.risk_score < minRisk) return false;
+async function loadScopedSubmissions(
+  roundIds: string[],
+): Promise<RawSubmission[]> {
+  if (roundIds.length === 0) return [];
 
-      if (
-        reviewStatus !== "all" &&
-        row.review_status !== reviewStatus
-      ) {
-        return false;
+  const { supabaseAdmin } = await import(
+    "@/integrations/supabase/client.server"
+  );
+
+  const { data, error } = await supabaseAdmin
+    .from("vote_submissions" as any)
+    .select(
+      "id,round_id,country_code,username,username_normalized,created_at,status,deletion_category,risk_score,ip_country,is_vpn,ip_hash,fingerprint_hash,device_token_hash,vote_entries(target_country_code,points)",
+    )
+    .in("round_id", roundIds)
+    .order("created_at", { ascending: true })
+    .limit(50000);
+
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as any[]).map((submission) => ({
+    id: String(submission.id),
+    round_id: String(submission.round_id),
+    country_code: String(submission.country_code ?? ""),
+    username: String(submission.username ?? ""),
+    username_normalized: String(
+      submission.username_normalized ?? submission.username ?? "",
+    ),
+    created_at: String(submission.created_at),
+    status: submission.status ?? null,
+    deletion_category: submission.deletion_category ?? null,
+    risk_score: Number(submission.risk_score ?? 0),
+    ip_country: submission.ip_country ?? null,
+    is_vpn: Boolean(submission.is_vpn),
+    ip_hash: submission.ip_hash ?? null,
+    fingerprint_hash: submission.fingerprint_hash ?? null,
+    device_token_hash: submission.device_token_hash ?? null,
+    vote_entries: (submission.vote_entries ?? []).map((entry: any) => ({
+      target_country_code: String(entry.target_country_code ?? ""),
+      points: Number(entry.points ?? 0),
+    })),
+  }));
+}
+
+function isResultsEligible(submission: RawSubmission) {
+  return submission.status !== "deleted";
+}
+
+export type ScopedAnalyticsSubmission = {
+  id: string;
+  round_id: string;
+  round_name: string;
+  edition_id: string;
+  edition_name: string;
+  username: string;
+  username_normalized: string;
+  country_code: string;
+  created_at: string;
+  status: string | null;
+  risk_score: number;
+  ip_country: string | null;
+  is_vpn: boolean;
+};
+
+export type ScopedAnalyticsEntry = {
+  submission_id: string;
+  round_id: string;
+  target_entry_key: string;
+  points: number;
+};
+
+export const getScopedAnalytics = createServerFn({
+  method: "POST",
+})
+  .inputValidator((input: { scope: AnalysisScope }) => ({
+    scope: validateAnalysisScope(input.scope),
+  }))
+  .handler(async ({ data }): Promise<{
+    editions: ScopeEdition[];
+    rounds: ScopeRound[];
+    submissions: ScopedAnalyticsSubmission[];
+    entries: ScopedAnalyticsEntry[];
+  }> => {
+    await requireAdmin();
+
+    const resolved = await resolveScope(data.scope);
+    const roundById = new Map(
+      resolved.rounds.map((round) => [round.id, round]),
+    );
+
+    const raw = await loadScopedSubmissions(
+      resolved.rounds.map((round) => round.id),
+    );
+
+    const submissions = raw.map((submission) => {
+      const round = roundById.get(submission.round_id);
+
+      return {
+        id: submission.id,
+        round_id: submission.round_id,
+        round_name: round?.name ?? "Unknown round",
+        edition_id: round?.edition_id ?? "",
+        edition_name: round?.edition_name ?? "Unknown edition",
+        username: submission.username,
+        username_normalized: submission.username_normalized,
+        country_code: submission.country_code,
+        created_at: submission.created_at,
+        status: submission.status,
+        risk_score: submission.risk_score,
+        ip_country: submission.ip_country,
+        is_vpn: submission.is_vpn,
+      };
+    });
+
+    const entries: ScopedAnalyticsEntry[] = [];
+
+    for (const submission of raw) {
+      if (!isResultsEligible(submission)) continue;
+
+      for (const entry of submission.vote_entries) {
+        entries.push({
+          submission_id: submission.id,
+          round_id: submission.round_id,
+          target_entry_key: entry.target_country_code,
+          points: entry.points,
+        });
+      }
+    }
+
+    return {
+      editions: resolved.editions,
+      rounds: resolved.rounds,
+      submissions,
+      entries,
+    };
+  });
+
+export type ScopedSimilarPair = {
+  countryA: string;
+  countryB: string;
+  matches: number;
+  maxScore: number;
+  averageScore: number;
+  sharedIpMatches: number;
+  sharedFingerprintMatches: number;
+  sharedDeviceMatches: number;
+  examples: {
+    edition_name: string;
+    round_name: string;
+    a_username: string;
+    b_username: string;
+    score: number;
+    timeDeltaSec: number;
+  }[];
+};
+
+export type ScopedCluster = {
+  id: number;
+  members: {
+    country_code: string;
+    usernames: string[];
+    ballotCount: number;
+    editions: number;
+    rounds: number;
+    highestBallotRisk: number;
+  }[];
+  reasons: string[];
+  sharedIpEdges: number;
+  sharedFingerprintEdges: number;
+  sharedDeviceEdges: number;
+  nearIdenticalEdges: number;
+  combinedRisk: number;
+};
+
+export type ScopedBlocPair = {
+  from: string;
+  to: string;
+  mean: number;
+  count: number;
+  z: number;
+};
+
+function cosine(a: Map<string, number>, b: Map<string, number>) {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (const value of a.values()) normA += value * value;
+  for (const value of b.values()) normB += value * value;
+
+  for (const [key, value] of a) {
+    const other = b.get(key);
+    if (other) dot += value * other;
+  }
+
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  return denominator === 0 ? 0 : dot / denominator;
+}
+
+function identityKey(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function pairKey(a: string, b: string) {
+  return [identityKey(a), identityKey(b)].sort().join("::");
+}
+
+export const getScopedDetection = createServerFn({
+  method: "POST",
+})
+  .inputValidator(
+    (input: {
+      scope: AnalysisScope;
+      similarityThreshold?: number;
+    }) => ({
+      scope: validateAnalysisScope(input.scope),
+      similarityThreshold: Math.max(
+        0,
+        Math.min(1, input.similarityThreshold ?? 0.9),
+      ),
+    }),
+  )
+  .handler(async ({ data }): Promise<{
+    editions: ScopeEdition[];
+    rounds: ScopeRound[];
+    similar: ScopedSimilarPair[];
+    clusters: ScopedCluster[];
+    blocs: ScopedBlocPair[];
+    identityCount: number;
+    ballotCount: number;
+  }> => {
+    await requireAdmin();
+
+    const resolved = await resolveScope(data.scope);
+    const roundById = new Map(
+      resolved.rounds.map((round) => [round.id, round]),
+    );
+
+    const list = (
+      await loadScopedSubmissions(
+        resolved.rounds.map((round) => round.id),
+      )
+    )
+      .filter(isResultsEligible)
+      .filter((submission) => Boolean(submission.country_code))
+      .slice(0, 10000);
+
+    /*
+     * IMPORTANT IDENTITY RULE
+     * -----------------------
+     * country_code is the permanent Head-of-Delegation identity.
+     *
+     * Multiple ballots from the same country across different rounds are
+     * repeated observations of ONE identity, not separate people. Therefore:
+     *
+     * - same-country ballots NEVER create similarity evidence against each other
+     * - same-country ballots NEVER create a technical "cluster"
+     * - technical clusters contain unique countries, not ballot rows
+     * - usernames remain display/supporting evidence only
+     */
+
+    const identities = new Map<string, RawSubmission[]>();
+
+    for (const submission of list) {
+      const key = identityKey(submission.country_code);
+      const current = identities.get(key) ?? [];
+      current.push(submission);
+      identities.set(key, current);
+    }
+
+    /*
+     * Near-identical ballot evidence is only compared inside the SAME ROUND.
+     * Comparing two raw ballots from different rounds with different entry sets
+     * creates fake similarity. We still analyse many editions at once by scanning
+     * every selected round and aggregating repeated cross-country pairs.
+     */
+    const submissionsByRound = new Map<string, RawSubmission[]>();
+
+    for (const submission of list) {
+      const current =
+        submissionsByRound.get(submission.round_id) ?? [];
+      current.push(submission);
+      submissionsByRound.set(submission.round_id, current);
+    }
+
+    type SimilarAgg = {
+      countryA: string;
+      countryB: string;
+      scores: number[];
+      sharedIpMatches: number;
+      sharedFingerprintMatches: number;
+      sharedDeviceMatches: number;
+      examples: ScopedSimilarPair["examples"];
+    };
+
+    const similarAgg = new Map<string, SimilarAgg>();
+
+    for (const [roundId, roundSubs] of submissionsByRound) {
+      const vectors = roundSubs.map((submission) => {
+        const map = new Map<string, number>();
+
+        for (const entry of submission.vote_entries) {
+          map.set(entry.target_country_code, entry.points);
+        }
+
+        return map;
+      });
+
+      for (let i = 0; i < roundSubs.length; i += 1) {
+        for (let j = i + 1; j < roundSubs.length; j += 1) {
+          const a = roundSubs[i];
+          const b = roundSubs[j];
+
+          if (
+            identityKey(a.country_code) ===
+            identityKey(b.country_code)
+          ) {
+            continue;
+          }
+
+          const score = cosine(vectors[i], vectors[j]);
+
+          if (score < data.similarityThreshold) continue;
+
+          const key = pairKey(
+            a.country_code,
+            b.country_code,
+          );
+
+          const ordered =
+            identityKey(a.country_code) <=
+            identityKey(b.country_code)
+              ? [a, b]
+              : [b, a];
+
+          const round = roundById.get(roundId);
+
+          const current =
+            similarAgg.get(key) ?? {
+              countryA: ordered[0].country_code,
+              countryB: ordered[1].country_code,
+              scores: [],
+              sharedIpMatches: 0,
+              sharedFingerprintMatches: 0,
+              sharedDeviceMatches: 0,
+              examples: [],
+            };
+
+          current.scores.push(score);
+
+          if (
+            a.ip_hash &&
+            a.ip_hash === b.ip_hash
+          ) {
+            current.sharedIpMatches += 1;
+          }
+
+          if (
+            a.fingerprint_hash &&
+            a.fingerprint_hash === b.fingerprint_hash
+          ) {
+            current.sharedFingerprintMatches += 1;
+          }
+
+          if (
+            a.device_token_hash &&
+            a.device_token_hash === b.device_token_hash
+          ) {
+            current.sharedDeviceMatches += 1;
+          }
+
+          if (current.examples.length < 5) {
+            current.examples.push({
+              edition_name:
+                round?.edition_name ?? "Unknown edition",
+              round_name:
+                round?.name ?? "Unknown round",
+              a_username: ordered[0].username,
+              b_username: ordered[1].username,
+              score: Number(score.toFixed(4)),
+              timeDeltaSec: Math.round(
+                Math.abs(
+                  new Date(a.created_at).getTime() -
+                    new Date(b.created_at).getTime(),
+                ) / 1000,
+              ),
+            });
+          }
+
+          similarAgg.set(key, current);
+        }
+      }
+    }
+
+    const similar: ScopedSimilarPair[] =
+      Array.from(similarAgg.values())
+        .map((item) => ({
+          countryA: item.countryA,
+          countryB: item.countryB,
+          matches: item.scores.length,
+          maxScore: Number(
+            Math.max(...item.scores).toFixed(4),
+          ),
+          averageScore: Number(
+            (
+              item.scores.reduce(
+                (sum, score) => sum + score,
+                0,
+              ) / item.scores.length
+            ).toFixed(4),
+          ),
+          sharedIpMatches: item.sharedIpMatches,
+          sharedFingerprintMatches:
+            item.sharedFingerprintMatches,
+          sharedDeviceMatches:
+            item.sharedDeviceMatches,
+          examples: item.examples,
+        }))
+        .sort(
+          (a, b) =>
+            b.matches - a.matches ||
+            b.maxScore - a.maxScore,
+        )
+        .slice(0, 200);
+
+    /*
+     * COUNTRY-IDENTITY TECHNICAL GRAPH
+     *
+     * Nodes = unique country identities.
+     * Edges = supporting evidence observed between DIFFERENT countries.
+     */
+    type EdgeEvidence = {
+      sharedIp: boolean;
+      sharedFingerprint: boolean;
+      sharedDevice: boolean;
+      nearIdentical: boolean;
+    };
+
+    const identityKeys = Array.from(identities.keys());
+    const identityIndex = new Map(
+      identityKeys.map((key, index) => [key, index]),
+    );
+
+    const parent = identityKeys.map((_, index) => index);
+
+    const find = (index: number): number => {
+      if (parent[index] === index) return index;
+      parent[index] = find(parent[index]);
+      return parent[index];
+    };
+
+    const union = (a: number, b: number) => {
+      const rootA = find(a);
+      const rootB = find(b);
+
+      if (rootA !== rootB) parent[rootA] = rootB;
+    };
+
+    const edgeMap = new Map<string, EdgeEvidence>();
+
+    const addEdgeEvidence = (
+      aCountry: string,
+      bCountry: string,
+      patch: Partial<EdgeEvidence>,
+    ) => {
+      const aKey = identityKey(aCountry);
+      const bKey = identityKey(bCountry);
+
+      if (aKey === bKey) return;
+
+      const key = pairKey(aKey, bKey);
+
+      const current =
+        edgeMap.get(key) ?? {
+          sharedIp: false,
+          sharedFingerprint: false,
+          sharedDevice: false,
+          nearIdentical: false,
+        };
+
+      edgeMap.set(key, {
+        ...current,
+        ...patch,
+      });
+    };
+
+    const addTechnicalEdges = (
+      getter: (submission: RawSubmission) => string | null,
+      field:
+        | "sharedIp"
+        | "sharedFingerprint"
+        | "sharedDevice",
+    ) => {
+      const byIdentifier = new Map<
+        string,
+        Set<string>
+      >();
+
+      for (const submission of list) {
+        const identifier = getter(submission);
+        if (!identifier) continue;
+
+        const countries =
+          byIdentifier.get(identifier) ??
+          new Set<string>();
+
+        countries.add(
+          identityKey(submission.country_code),
+        );
+
+        byIdentifier.set(identifier, countries);
       }
 
-      if (
-        onlyRepeated &&
-        !row.repeated_after_moderation
-      ) {
-        return false;
+      for (const countries of byIdentifier.values()) {
+        const countryList = Array.from(countries);
+
+        if (countryList.length < 2) continue;
+
+        for (let i = 0; i < countryList.length; i += 1) {
+          for (
+            let j = i + 1;
+            j < countryList.length;
+            j += 1
+          ) {
+            addEdgeEvidence(
+              countryList[i],
+              countryList[j],
+              { [field]: true },
+            );
+          }
+        }
       }
+    };
 
-      if (needle) {
-        const haystack = [
-          row.voting_country_code,
-          voterName(row.voting_country_code),
-          row.target_country_code,
-          targetName(row.target_country_code),
-        ]
-          .join(" ")
-          .toLowerCase();
+    addTechnicalEdges(
+      (submission) => submission.ip_hash,
+      "sharedIp",
+    );
 
-        if (!haystack.includes(needle)) {
-          return false;
+    addTechnicalEdges(
+      (submission) => submission.fingerprint_hash,
+      "sharedFingerprint",
+    );
+
+    addTechnicalEdges(
+      (submission) => submission.device_token_hash,
+      "sharedDevice",
+    );
+
+    for (const pair of similar) {
+      addEdgeEvidence(
+        pair.countryA,
+        pair.countryB,
+        { nearIdentical: true },
+      );
+    }
+
+    for (const [key] of edgeMap) {
+      const [aKey, bKey] = key.split("::");
+
+      const aIndex = identityIndex.get(aKey);
+      const bIndex = identityIndex.get(bKey);
+
+      if (
+        aIndex !== undefined &&
+        bIndex !== undefined
+      ) {
+        union(aIndex, bIndex);
+      }
+    }
+
+    const grouped = new Map<number, string[]>();
+
+    identityKeys.forEach((countryKey, index) => {
+      const root = find(index);
+      const members = grouped.get(root) ?? [];
+      members.push(countryKey);
+      grouped.set(root, members);
+    });
+
+    const clusters: ScopedCluster[] = [];
+    let clusterId = 1;
+
+    for (const memberKeys of grouped.values()) {
+      if (memberKeys.length < 2) continue;
+
+      const memberSet = new Set(memberKeys);
+
+      let sharedIpEdges = 0;
+      let sharedFingerprintEdges = 0;
+      let sharedDeviceEdges = 0;
+      let nearIdenticalEdges = 0;
+
+      const reasons = new Set<string>();
+
+      for (const [key, evidence] of edgeMap) {
+        const [aKey, bKey] = key.split("::");
+
+        if (
+          !memberSet.has(aKey) ||
+          !memberSet.has(bKey)
+        ) {
+          continue;
+        }
+
+        if (evidence.sharedIp) {
+          sharedIpEdges += 1;
+          reasons.add("shared IP between countries");
+        }
+
+        if (evidence.sharedFingerprint) {
+          sharedFingerprintEdges += 1;
+          reasons.add(
+            "shared device fingerprint between countries",
+          );
+        }
+
+        if (evidence.sharedDevice) {
+          sharedDeviceEdges += 1;
+          reasons.add(
+            "shared device token between countries",
+          );
+        }
+
+        if (evidence.nearIdentical) {
+          nearIdenticalEdges += 1;
+          reasons.add(
+            "near-identical voting between countries",
+          );
         }
       }
 
-      return true;
-    });
-  }, [
-    relationships,
-    minRisk,
-    reviewStatus,
-    onlyRepeated,
-    search,
-    byCountryCode,
-    byEntryKey,
-  ]);
+      const members = memberKeys.map((key) => {
+        const ballots = identities.get(key) ?? [];
 
-  const summary = useMemo(
-    () => ({
-      total: relationships.length,
-      high: relationships.filter(
-        (row) => row.risk_score >= 65,
-      ).length,
-      repeated: relationships.filter(
-        (row) => row.repeated_after_moderation,
-      ).length,
-      watch: relationships.filter(
-        (row) => row.review_status === "watchlist",
-      ).length,
-    }),
-    [relationships],
-  );
+        const usernames = Array.from(
+          new Set(
+            ballots
+              .map((ballot) => ballot.username)
+              .filter(Boolean),
+          ),
+        ).slice(0, 4);
 
-  return (
-    <AdminShell title="Friend-Voting Analysis">
-      <div className="space-y-6">
-        <AnalysisScopePicker
-          value={scope}
-          onChange={setScope}
-        />
+        return {
+          country_code:
+            ballots[0]?.country_code ?? key,
+          usernames,
+          ballotCount: ballots.length,
+          editions: new Set(
+            ballots
+              .map((ballot) =>
+                roundById.get(ballot.round_id)?.edition_id,
+              )
+              .filter(Boolean),
+          ).size,
+          rounds: new Set(
+            ballots.map((ballot) => ballot.round_id),
+          ).size,
+          highestBallotRisk: Math.max(
+            0,
+            ...ballots.map(
+              (ballot) => ballot.risk_score ?? 0,
+            ),
+          ),
+        };
+      });
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted-foreground">
-              Risk is recalculated from ballots inside the selected period.
-              The voter side remains the permanent Solaris country identity;
-              the receiving side remains a stable target entry key.
-            </p>
+      const averageBallotRisk =
+        members.reduce(
+          (sum, member) =>
+            sum + member.highestBallotRisk,
+          0,
+        ) / members.length;
 
-            <p className="mt-1 text-xs text-muted-foreground">
-              {scoped.data
-                ? `${scoped.data.editions.length} edition${
-                    scoped.data.editions.length === 1
-                      ? ""
-                      : "s"
-                  } · ${scoped.data.rounds.length} round${
-                    scoped.data.rounds.length === 1
-                      ? ""
-                      : "s"
-                  }`
-                : "Loading scope…"}
-            </p>
-          </div>
+      const technicalStrength =
+        sharedIpEdges * 18 +
+        sharedFingerprintEdges * 20 +
+        sharedDeviceEdges * 22 +
+        nearIdenticalEdges * 12;
 
-          <Button
-            onClick={() => scoped.refetch()}
-            disabled={scoped.isFetching}
-          >
-            <RefreshCcw
-              className={
-                scoped.isFetching
-                  ? "h-4 w-4 animate-spin"
-                  : "h-4 w-4"
-              }
-            />
-            Refresh analysis
-          </Button>
-        </div>
+      const combinedRisk = Math.min(
+        100,
+        Math.round(
+          averageBallotRisk * 0.35 +
+            technicalStrength +
+            Math.max(0, members.length - 2) * 6,
+        ),
+      );
 
-        {scoped.isLoading ? (
-          <Loading />
-        ) : scoped.error ? (
-          <Empty
-            title="Friend-voting analysis failed"
-            body={
-              scoped.error instanceof Error
-                ? scoped.error.message
-                : "Unknown analysis error"
-            }
-          />
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat
-                label="Relationships"
-                value={summary.total}
-              />
-              <Stat
-                label="High risk (65+)"
-                value={summary.high}
-              />
-              <Stat
-                label="Repeat offenders"
-                value={summary.repeated}
-              />
-              <Stat
-                label="On watchlist"
-                value={summary.watch}
-              />
-            </div>
+      clusters.push({
+        id: clusterId,
+        members,
+        reasons: Array.from(reasons),
+        sharedIpEdges,
+        sharedFingerprintEdges,
+        sharedDeviceEdges,
+        nearIdenticalEdges,
+        combinedRisk,
+      });
 
-            <Tabs defaultValue="relationships">
-              <TabsList className="max-w-full overflow-x-auto">
-                <TabsTrigger value="relationships">
-                  <Heart className="mr-1.5 h-4 w-4" />
-                  Relationships
-                </TabsTrigger>
+      clusterId += 1;
+    }
 
-                <TabsTrigger value="groups">
-                  <Users className="mr-1.5 h-4 w-4" />
-                  Friend groups
-                </TabsTrigger>
+    clusters.sort(
+      (a, b) =>
+        b.combinedRisk - a.combinedRisk ||
+        b.members.length - a.members.length,
+    );
 
-                <TabsTrigger value="history">
-                  <History className="mr-1.5 h-4 w-4" />
-                  Moderation history
-                </TabsTrigger>
+    /*
+     * Voting-bloc outliers remain voter-country -> target-entry.
+     * Multiple ballots from one country are intentionally aggregated because
+     * the country is the identity.
+     */
+    const aggregates = new Map<
+      string,
+      Map<
+        string,
+        { sum: number; count: number }
+      >
+    >();
 
-                <TabsTrigger value="settings">
-                  <Sliders className="mr-1.5 h-4 w-4" />
-                  Detection settings
-                </TabsTrigger>
-              </TabsList>
+    for (const submission of list) {
+      const voter = identityKey(
+        submission.country_code,
+      );
 
-              <TabsContent
-                value="relationships"
-                className="mt-4 space-y-4"
-              >
-                <div className="glass-strong flex flex-wrap items-end gap-4 rounded-2xl p-4">
-                  <div className="min-w-[220px] flex-1 space-y-1.5">
-                    <Label className="text-xs uppercase tracking-widest text-primary">
-                      Search
-                    </Label>
+      const targets =
+        aggregates.get(voter) ??
+        new Map<
+          string,
+          { sum: number; count: number }
+        >();
 
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      for (const entry of submission.vote_entries) {
+        const current =
+          targets.get(entry.target_country_code) ??
+          { sum: 0, count: 0 };
 
-                      <Input
-                        className="pl-9"
-                        placeholder="Voter country or target entry"
-                        value={search}
-                        onChange={(event) =>
-                          setSearch(event.target.value)
-                        }
-                      />
-                    </div>
-                  </div>
+        current.sum += entry.points;
+        current.count += 1;
 
-                  <div className="w-48 space-y-1.5">
-                    <Label className="text-xs uppercase tracking-widest text-primary">
-                      Minimum risk: {minRisk}
-                    </Label>
-
-                    <Slider
-                      value={[minRisk]}
-                      min={0}
-                      max={100}
-                      step={5}
-                      onValueChange={(value) =>
-                        setMinRisk(value[0] ?? 0)
-                      }
-                    />
-                  </div>
-
-                  <div className="w-52 space-y-1.5">
-                    <Label className="text-xs uppercase tracking-widest text-primary">
-                      Review status
-                    </Label>
-
-                    <Select
-                      value={reviewStatus}
-                      onValueChange={setReviewStatus}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-
-                      <SelectContent>
-                        <SelectItem value="all">
-                          All
-                        </SelectItem>
-
-                        {REVIEW_STATUSES.map((item) => (
-                          <SelectItem
-                            key={item.value}
-                            value={item.value}
-                          >
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <label className="flex min-h-11 items-center gap-2">
-                    <Switch
-                      checked={onlyRepeated}
-                      onCheckedChange={setOnlyRepeated}
-                    />
-                    <span className="text-sm">
-                      Repeat offenders only
-                    </span>
-                  </label>
-
-                  {filtered.length > 0 ? (
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        downloadCSV(
-                          `friend-voting-${analysisScopeKey(
-                            scope,
-                          )}.csv`,
-                          filtered.map((row) => ({
-                            voting_country_code:
-                              row.voting_country_code,
-                            voting_country: voterName(
-                              row.voting_country_code,
-                            ),
-                            target_entry_key:
-                              row.target_country_code,
-                            target_entry: targetName(
-                              row.target_country_code,
-                            ),
-                            opportunities:
-                              row.shared_opportunities,
-                            support: row.support_count,
-                            max_scores:
-                              row.maximum_score_count,
-                            avg_points:
-                              row.average_points,
-                            preference_lift:
-                              row.preference_lift,
-                            audience_uplift:
-                              row.audience_uplift,
-                            reciprocity:
-                              row.reciprocity_score,
-                            risk: row.risk_score,
-                            label: row.risk_label,
-                            review_status:
-                              row.review_status,
-                            editions:
-                              row.editions_count,
-                            rounds:
-                              row.rounds_count,
-                          })),
-                        )
-                      }
-                    >
-                      Export CSV
-                    </Button>
-                  ) : null}
-                </div>
-
-                {filtered.length === 0 ? (
-                  <Empty
-                    title="No relationship data"
-                    body="No relationships match this period and filter combination."
-                  />
-                ) : (
-                  <div className="glass-strong overflow-x-auto rounded-2xl p-2">
-                    <table className="w-full min-w-[980px] text-sm">
-                      <thead className="text-xs uppercase text-muted-foreground">
-                        <tr>
-                          <th className="py-2 pl-2 pr-3 text-left">
-                            Voting country
-                          </th>
-                          <th className="py-2 pr-3 text-left">
-                            Target entry
-                          </th>
-                          <th className="py-2 pr-3 text-right">
-                            Opps
-                          </th>
-                          <th className="py-2 pr-3 text-right">
-                            Support
-                          </th>
-                          <th className="py-2 pr-3 text-right">
-                            Max
-                          </th>
-                          <th className="py-2 pr-3 text-right">
-                            Avg
-                          </th>
-                          <th className="py-2 pr-3 text-right">
-                            Lift
-                          </th>
-                          <th className="py-2 pr-3 text-right">
-                            Uplift
-                          </th>
-                          <th className="py-2 pr-3 text-right">
-                            Recip.
-                          </th>
-                          <th className="py-2 pr-3 text-right">
-                            Risk
-                          </th>
-                          <th className="py-2 pr-2 text-left">
-                            Status
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {filtered.map((row) => {
-                          const targetEntry =
-                            byEntryKey.get(
-                              row.target_country_code,
-                            );
-
-                          return (
-                            <tr
-                              key={`${row.voting_country_code}>${row.target_country_code}`}
-                              className="cursor-pointer border-t border-border/60 hover:bg-primary/5"
-                              onClick={() =>
-                                setSelected(row)
-                              }
-                            >
-                              <td className="py-2 pl-2 pr-3">
-                                <span className="inline-flex items-center gap-1.5 font-medium">
-                                  <CountryFlag
-                                    country={byCountryCode.get(
-                                      row.voting_country_code,
-                                    )}
-                                    size={18}
-                                  />
-                                  {voterName(
-                                    row.voting_country_code,
-                                  )}
-                                </span>
-                              </td>
-
-                              <td className="py-2 pr-3">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <EntryAvatar
-                                    entry={targetEntry}
-                                    size={18}
-                                  />
-                                  {targetName(
-                                    row.target_country_code,
-                                  )}
-                                </span>
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {row.shared_opportunities}
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {row.support_count} (
-                                {Math.round(
-                                  row.support_frequency * 100,
-                                )}
-                                %)
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {row.maximum_score_count}
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {row.average_points.toFixed(2)}
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {row.preference_lift.toFixed(2)}×
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {row.audience_uplift >= 0
-                                  ? "+"
-                                  : ""}
-                                {row.audience_uplift.toFixed(1)}
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {row.reciprocity_score.toFixed(
-                                  2,
-                                )}
-                              </td>
-
-                              <td className="py-2 pr-3 text-right">
-                                <Badge
-                                  className={riskClass(
-                                    row.risk_score,
-                                  )}
-                                >
-                                  {row.risk_score}
-                                </Badge>
-                              </td>
-
-                              <td className="py-2 pr-2">
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px]"
-                                >
-                                  {REVIEW_STATUSES.find(
-                                    (item) =>
-                                      item.value ===
-                                      row.review_status,
-                                  )?.label ??
-                                    row.review_status}
-                                </Badge>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent
-                value="groups"
-                className="mt-4"
-              >
-                {groups.length === 0 ? (
-                  <Empty
-                    title="No friend groups"
-                    body="No multi-delegation friend-voting groups were detected in this scope."
-                  />
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {groups.map((group, index) => (
-                      <div
-                        key={`${group.label}:${index}`}
-                        className="glass-strong rounded-2xl p-4"
-                      >
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <h3 className="font-semibold">
-                            {group.label} ·{" "}
-                            {group.members.length} delegations
-                          </h3>
-
-                          <Badge
-                            className={riskClass(
-                              group.risk_score,
-                            )}
-                          >
-                            {group.risk_score}
-                          </Badge>
-                        </div>
-
-                        <p className="mb-2 text-xs text-muted-foreground">
-                          {group.risk_label}
-                        </p>
-
-                        <div className="mb-3 flex flex-wrap gap-1">
-                          {group.members.map((member) => (
-                            <Badge
-                              key={member}
-                              variant="outline"
-                              className="text-[10px]"
-                            >
-                              {voterName(member)}
-                            </Badge>
-                          ))}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <Metric
-                            label="Internal max share"
-                            value={`${Math.round(
-                              group.internal_maximum_share *
-                                100,
-                            )}%`}
-                          />
-                          <Metric
-                            label="Internal top-3 share"
-                            value={`${Math.round(
-                              group.internal_top_three_share *
-                                100,
-                            )}%`}
-                          />
-                          <Metric
-                            label="Editions observed"
-                            value={String(
-                              group.editions_observed,
-                            )}
-                          />
-                          <Metric
-                            label="Rounds observed"
-                            value={String(
-                              group.rounds_observed,
-                            )}
-                          />
-                        </div>
-
-                        {group.reasons.length > 0 ? (
-                          <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-                            {group.reasons.map(
-                              (reason, reasonIndex) => (
-                                <li key={reasonIndex}>
-                                  • {reason}
-                                </li>
-                              ),
-                            )}
-                          </ul>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent
-                value="history"
-                className="mt-4"
-              >
-                {moderationEvents.length === 0 ? (
-                  <Empty
-                    title="No moderation history"
-                    body="No moderation events fall inside this selected analysis period."
-                  />
-                ) : (
-                  <div className="glass-strong overflow-x-auto rounded-2xl p-2">
-                    <table className="w-full min-w-[760px] text-sm">
-                      <thead className="text-xs uppercase text-muted-foreground">
-                        <tr>
-                          <th className="py-2 pl-2 pr-3 text-left">
-                            When
-                          </th>
-                          <th className="py-2 pr-3 text-left">
-                            Voter
-                          </th>
-                          <th className="py-2 pr-3 text-left">
-                            Target
-                          </th>
-                          <th className="py-2 pr-3 text-left">
-                            Action
-                          </th>
-                          <th className="py-2 pr-2 text-left">
-                            Note
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {moderationEvents.map(
-                          (event: any) => (
-                            <tr
-                              key={event.id}
-                              className="border-t border-border/60"
-                            >
-                              <td className="whitespace-nowrap py-2 pl-2 pr-3 text-muted-foreground">
-                                {new Date(
-                                  event.performed_at,
-                                ).toLocaleString()}
-                              </td>
-
-                              <td className="py-2 pr-3">
-                                {voterName(
-                                  event.voting_country_code,
-                                )}
-                              </td>
-
-                              <td className="py-2 pr-3">
-                                {event.target_country_code
-                                  ? targetName(
-                                      event.target_country_code,
-                                    )
-                                  : "—"}
-                              </td>
-
-                              <td className="py-2 pr-3">
-                                {event.action}
-                              </td>
-
-                              <td className="py-2 pr-2 text-muted-foreground">
-                                {event.moderator_note ?? "—"}
-                              </td>
-                            </tr>
-                          ),
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent
-                value="settings"
-                className="mt-4"
-              >
-                <SettingsPanel
-                  onSaved={() => scoped.refetch()}
-                />
-              </TabsContent>
-            </Tabs>
-          </>
-        )}
-
-        <RelationshipDialog
-          relationship={selected}
-          onClose={() => setSelected(null)}
-          voterName={voterName}
-          targetName={targetName}
-          byCountryCode={byCountryCode}
-          byEntryKey={byEntryKey}
-          onReviewed={() => scoped.refetch()}
-        />
-      </div>
-    </AdminShell>
-  );
-}
-
-function RelationshipDialog({
-  relationship,
-  onClose,
-  voterName,
-  targetName,
-  byCountryCode,
-  byEntryKey,
-  onReviewed,
-}: {
-  relationship: ScopedFriendRelationship | null;
-  onClose: () => void;
-  voterName: (code: string) => string;
-  targetName: (key: string) => string;
-  byCountryCode: Map<string, any>;
-  byEntryKey: Map<string, any>;
-  onReviewed: () => void;
-}) {
-  const reviewFn = useServerFn(setRelationshipReview);
-
-  const [status, setStatus] =
-    useState("under_review");
-  const [note, setNote] = useState("");
-
-  const review = useMutation({
-    mutationFn: async () => {
-      if (!relationship?.id) {
-        throw new Error(
-          "Run the stored all-history recalculation once before reviewing this relationship.",
+        targets.set(
+          entry.target_country_code,
+          current,
         );
       }
 
-      return reviewFn({
-        data: {
-          id: relationship.id,
-          status,
-          note,
-        },
-      });
-    },
+      aggregates.set(voter, targets);
+    }
 
-    onSuccess: () => {
-      toast.success("Review saved");
-      onReviewed();
-      onClose();
-    },
+    const blocs: ScopedBlocPair[] = [];
 
-    onError: (error: any) =>
-      toast.error(error?.message ?? "Could not save review"),
-  });
+    for (const [from, targets] of aggregates) {
+      const means = Array.from(
+        targets.values(),
+      ).map(
+        (value) => value.sum / value.count,
+      );
 
-  return (
-    <Dialog
-      open={Boolean(relationship)}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>
-            {relationship ? (
-              <span className="inline-flex items-center gap-2">
-                <CountryFlag
-                  country={byCountryCode.get(
-                    relationship.voting_country_code,
-                  )}
-                  size={20}
-                />
-                {voterName(
-                  relationship.voting_country_code,
-                )}
-                <span className="text-muted-foreground">
-                  →
-                </span>
-                <EntryAvatar
-                  entry={byEntryKey.get(
-                    relationship.target_country_code,
-                  )}
-                  size={20}
-                />
-                {targetName(
-                  relationship.target_country_code,
-                )}
-              </span>
-            ) : (
-              "Relationship"
-            )}
-          </DialogTitle>
-        </DialogHeader>
+      const meanAll =
+        means.reduce(
+          (sum, value) => sum + value,
+          0,
+        ) / Math.max(1, means.length);
 
-        {relationship ? (
-          <div className="space-y-5">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge
-                className={riskClass(
-                  relationship.risk_score,
-                )}
-              >
-                Risk {relationship.risk_score}
-              </Badge>
+      const variance =
+        means.reduce(
+          (sum, value) =>
+            sum + (value - meanAll) ** 2,
+          0,
+        ) / Math.max(1, means.length);
 
-              <span className="text-sm text-muted-foreground">
-                {relationship.risk_label}
-              </span>
-            </div>
+      const sd = Math.sqrt(variance) || 1;
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Metric
-                label="Opportunities"
-                value={String(
-                  relationship.shared_opportunities,
-                )}
-              />
-              <Metric
-                label="Support rate"
-                value={`${Math.round(
-                  relationship.support_frequency * 100,
-                )}%`}
-              />
-              <Metric
-                label="Max scores"
-                value={String(
-                  relationship.maximum_score_count,
-                )}
-              />
-              <Metric
-                label="Preference lift"
-                value={`${relationship.preference_lift}×`}
-              />
-              <Metric
-                label="Editions"
-                value={String(
-                  relationship.editions_count,
-                )}
-              />
-              <Metric
-                label="Rounds"
-                value={String(
-                  relationship.rounds_count,
-                )}
-              />
-              <Metric
-                label="Reciprocity"
-                value={String(
-                  relationship.reciprocity_score,
-                )}
-              />
-              <Metric
-                label="Audience uplift"
-                value={String(
-                  relationship.audience_uplift,
-                )}
-              />
-            </div>
+      for (const [to, value] of targets) {
+        const mean = value.sum / value.count;
+        const z = (mean - meanAll) / sd;
 
-            <section>
-              <h4 className="mb-2 text-xs uppercase tracking-widest text-primary">
-                Why this score
-              </h4>
-
-              <ul className="space-y-1 text-sm">
-                {relationship.reasons.map(
-                  (reason, index) => (
-                    <li
-                      key={index}
-                      className="flex items-start justify-between gap-3"
-                    >
-                      <span>{reason.text}</span>
-                      <span
-                        className={
-                          reason.delta >= 0
-                            ? "tabular-nums text-amber-400"
-                            : "tabular-nums text-emerald-400"
-                        }
-                      >
-                        {reason.delta > 0 ? "+" : ""}
-                        {reason.delta}
-                      </span>
-                    </li>
-                  ),
-                )}
-              </ul>
-            </section>
-
-            <section>
-              <h4 className="mb-2 text-xs uppercase tracking-widest text-primary">
-                Timeline inside selected period
-              </h4>
-
-              <div className="max-h-72 overflow-y-auto rounded-xl border border-border/60">
-                <table className="w-full min-w-[620px] text-xs">
-                  <thead className="sticky top-0 bg-background/80 uppercase text-muted-foreground backdrop-blur">
-                    <tr>
-                      <th className="p-2 text-left">
-                        Edition
-                      </th>
-                      <th className="p-2 text-left">
-                        Round
-                      </th>
-                      <th className="p-2 text-right">
-                        Points
-                      </th>
-                      <th className="p-2 text-right">
-                        Rank
-                      </th>
-                      <th className="p-2 text-right">
-                        Audience
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {relationship.timeline.map(
-                      (item, index) => (
-                        <tr
-                          key={`${item.roundId}:${index}`}
-                          className="border-t border-border/60"
-                        >
-                          <td className="p-2">
-                            {item.editionName}
-                          </td>
-                          <td className="p-2">
-                            {item.roundName}
-                          </td>
-                          <td className="p-2 text-right tabular-nums">
-                            {item.points}
-                          </td>
-                          <td className="p-2 text-right tabular-nums">
-                            {item.ballotRank ?? "—"}
-                          </td>
-                          <td className="p-2 text-right tabular-nums">
-                            {item.audienceAverage}
-                          </td>
-                        </tr>
-                      ),
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="space-y-2 border-t border-border/60 pt-4">
-              <h4 className="text-xs uppercase tracking-widest text-primary">
-                Review decision
-              </h4>
-
-              {!relationship.id ? (
-                <p className="text-xs text-amber-400">
-                  This pair does not yet have a stored all-history relationship
-                  row. The scoped analysis is still valid, but moderation review
-                  can only be attached after the all-history cache has been
-                  calculated at least once.
-                </p>
-              ) : null}
-
-              <Select
-                value={status}
-                onValueChange={setStatus}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-
-                <SelectContent>
-                  {REVIEW_STATUSES.map((item) => (
-                    <SelectItem
-                      key={item.value}
-                      value={item.value}
-                    >
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Textarea
-                placeholder="Moderator note"
-                value={note}
-                onChange={(event) =>
-                  setNote(event.target.value)
-                }
-              />
-            </section>
-          </div>
-        ) : null}
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={onClose}
-          >
-            Close
-          </Button>
-
-          <Button
-            disabled={
-              !relationship?.id ||
-              review.isPending
-            }
-            onClick={() => review.mutate()}
-          >
-            Save decision
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SettingsPanel({
-  onSaved,
-}: {
-  onSaved: () => void;
-}) {
-  const qc = useQueryClient();
-  const getFn = useServerFn(getFriendVotingSettings);
-  const saveFn = useServerFn(saveFriendVotingSettings);
-
-  const [draft, setDraft] =
-    useState<FriendVotingSettings | null>(null);
-
-  const settings = useQuery({
-    queryKey: ["fv.settings"],
-    queryFn: async () => {
-      const value =
-        (await getFn()) as FriendVotingSettings;
-      setDraft(value);
-      return value;
-    },
-  });
-
-  const save = useMutation({
-    mutationFn: () =>
-      saveFn({
-        data: {
-          settings: draft!,
-        },
-      }),
-
-    onSuccess: () => {
-      toast.success("Detection settings saved");
-      void qc.invalidateQueries({
-        queryKey: ["fv.settings"],
-      });
-      onSaved();
-    },
-
-    onError: (error: any) =>
-      toast.error(
-        error?.message ??
-          "Could not save settings",
-      ),
-  });
-
-  if (settings.isLoading || !draft) {
-    return <Loading />;
-  }
-
-  return (
-    <div className="glass-strong space-y-5 rounded-2xl p-4 sm:p-5">
-      <div>
-        <h3 className="font-semibold">
-          Core thresholds
-        </h3>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <NumberField
-            label="Minimum shared opportunities"
-            value={draft.minOpportunities}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                minOpportunities: value,
-              })
-            }
-          />
-
-          <NumberField
-            label="Support frequency threshold"
-            value={draft.supportFrequencyThreshold}
-            step={0.05}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                supportFrequencyThreshold: value,
-              })
-            }
-          />
-
-          <NumberField
-            label="Top-three threshold"
-            value={draft.topThreeThreshold}
-            step={0.05}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                topThreeThreshold: value,
-              })
-            }
-          />
-
-          <NumberField
-            label="Maximum-score threshold"
-            value={draft.maximumScoreThreshold}
-            step={0.05}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                maximumScoreThreshold: value,
-              })
-            }
-          />
-
-          <NumberField
-            label="Preference-lift threshold"
-            value={draft.preferenceLiftThreshold}
-            step={0.1}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                preferenceLiftThreshold: value,
-              })
-            }
-          />
-
-          <NumberField
-            label="Audience-uplift threshold"
-            value={draft.audienceUpliftThreshold}
-            step={0.1}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                audienceUpliftThreshold: value,
-              })
-            }
-          />
-
-          <NumberField
-            label="Minimum editions"
-            value={draft.minEditions}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                minEditions: value,
-              })
-            }
-          />
-
-          <NumberField
-            label="Streak threshold"
-            value={draft.streakThreshold}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                streakThreshold: value,
-              })
-            }
-          />
-
-          <NumberField
-            label="Small-sample penalty"
-            value={draft.smallSamplePenalty}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                smallSamplePenalty: value,
-              })
-            }
-          />
-        </div>
-      </div>
-
-      <label className="flex min-h-11 items-center gap-2 text-sm">
-        <Switch
-          checked={draft.ignoreTestBallots}
-          onCheckedChange={(checked) =>
-            setDraft({
-              ...draft,
-              ignoreTestBallots: checked,
-            })
-          }
-        />
-
-        Exclude test / administrative deletions from integrity evidence
-      </label>
-
-      <div>
-        <h3 className="font-semibold">
-          Signal weights
-        </h3>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {Object.entries(draft.weights).map(
-            ([key, value]) => (
-              <NumberField
-                key={key}
-                label={humanizeKey(key)}
-                value={value}
-                onChange={(next) =>
-                  setDraft({
-                    ...draft,
-                    weights: {
-                      ...draft.weights,
-                      [key]: next,
-                    },
-                  })
-                }
-              />
-            ),
-          )}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="font-semibold">
-          Risk bands
-        </h3>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {Object.entries(draft.riskBands).map(
-            ([key, value]) => (
-              <NumberField
-                key={key}
-                label={humanizeKey(key)}
-                value={value}
-                onChange={(next) =>
-                  setDraft({
-                    ...draft,
-                    riskBands: {
-                      ...draft.riskBands,
-                      [key]: next,
-                    },
-                  })
-                }
-              />
-            ),
-          )}
-        </div>
-      </div>
-
-      <Button
-        disabled={save.isPending}
-        onClick={() => save.mutate()}
-      >
-        Save settings
-      </Button>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="glass-strong rounded-2xl p-4">
-      <p className="text-xs uppercase tracking-widest text-primary">
-        {label}
-      </p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border/60 p-2">
-      <p className="text-[10px] uppercase text-muted-foreground">
-        {label}
-      </p>
-      <p className="font-medium tabular-nums">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  step = 1,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  step?: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">
-        {label}
-      </Label>
-
-      <Input
-        type="number"
-        step={step}
-        value={String(value)}
-        onChange={(event) =>
-          onChange(Number(event.target.value))
+        if (
+          value.count >= 2 &&
+          z >= 1.5
+        ) {
+          blocs.push({
+            from,
+            to,
+            mean: Number(mean.toFixed(2)),
+            count: value.count,
+            z: Number(z.toFixed(2)),
+          });
         }
-      />
-    </div>
-  );
-}
+      }
+    }
 
-function Loading() {
-  return (
-    <div className="glass rounded-2xl p-10 text-center text-sm text-muted-foreground">
-      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-      Analysing…
-    </div>
-  );
-}
+    blocs.sort(
+      (a, b) =>
+        b.z - a.z ||
+        b.count - a.count,
+    );
 
-function Empty({
-  title,
-  body,
-}: {
-  title?: string;
-  body: string;
-}) {
-  return (
-    <div className="glass rounded-2xl p-10 text-center">
-      {title ? (
-        <h3 className="font-semibold">
-          {title}
-        </h3>
-      ) : null}
-      <p className="text-sm text-muted-foreground">
-        {body}
-      </p>
-    </div>
-  );
-}
+    return {
+      editions: resolved.editions,
+      rounds: resolved.rounds,
+      similar,
+      clusters: clusters.slice(0, 100),
+      blocs: blocs.slice(0, 200),
+      identityCount: identities.size,
+      ballotCount: list.length,
+    };
+  });
 
-function humanizeKey(value: string) {
-  return value
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/_/g, " ")
-    .replace(/^./, (letter) => letter.toUpperCase());
-}
+export type ScopedFriendRelationship = {
+  id: string | null;
+  voting_country_code: string;
+  target_country_code: string;
+  shared_opportunities: number;
+  support_count: number;
+  maximum_score_count: number;
+  active_maximum_score_count: number;
+  deleted_maximum_score_count: number;
+  average_points: number;
+  support_frequency: number;
+  top_three_frequency: number;
+  maximum_score_frequency: number;
+  preference_lift: number;
+  audience_uplift: number;
+  longest_support_streak: number;
+  editions_count: number;
+  rounds_count: number;
+  reciprocity_score: number;
+  clique_score: number;
+  previous_friend_vote_deletions: number;
+  repeated_after_moderation: boolean;
+  risk_score: number;
+  risk_label: string;
+  reasons: { text: string; delta: number }[];
+  review_status: string;
+  moderator_note: string | null;
+  timeline: {
+    editionName: string;
+    roundName: string;
+    roundId: string;
+    points: number;
+    maxScore: number;
+    ballotRank: number | null;
+    audienceAverage: number;
+    audienceRank: number | null;
+    status: string;
+    deletionCategory: string | null;
+    createdAt: string;
+  }[];
+};
+
+export type ScopedFriendGroup = {
+  label: string;
+  members: string[];
+  internal_point_share: number;
+  internal_top_three_share: number;
+  internal_maximum_share: number;
+  group_reciprocity: number;
+  editions_observed: number;
+  rounds_observed: number;
+  strong_internal_edges: number;
+  average_internal_support: number;
+  average_external_support: number;
+  deleted_internal_ballots: number;
+  repeated_after_moderation: boolean;
+  risk_score: number;
+  risk_label: string;
+  reasons: string[];
+};
+
+export const getScopedFriendVotingAnalysis = createServerFn({
+  method: "POST",
+})
+  .inputValidator((input: { scope: AnalysisScope }) => ({
+    scope: validateAnalysisScope(input.scope),
+  }))
+  .handler(async ({ data }): Promise<{
+    editions: ScopeEdition[];
+    rounds: ScopeRound[];
+    relationships: ScopedFriendRelationship[];
+    groups: ScopedFriendGroup[];
+    moderationEvents: any[];
+  }> => {
+    await requireAdmin();
+
+    const resolved = await resolveScope(data.scope);
+    const roundIds = resolved.rounds.map((round) => round.id);
+
+    if (roundIds.length === 0) {
+      return {
+        editions: resolved.editions,
+        rounds: [],
+        relationships: [],
+        groups: [],
+        moderationEvents: [],
+      };
+    }
+
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const [
+      raw,
+      { data: settingsRow },
+      { data: storedRows },
+    ] = await Promise.all([
+      loadScopedSubmissions(roundIds),
+
+      supabaseAdmin
+        .from("friend_voting_settings" as any)
+        .select("settings")
+        .eq("singleton", true)
+        .maybeSingle(),
+
+      supabaseAdmin
+        .from("friend_voting_relationships" as any)
+        .select(
+          "id,voting_country_code,target_country_code,review_status,moderator_note",
+        ),
+    ]);
+
+    const settings = mergeSettings(
+      (settingsRow as any)?.settings ?? null,
+    );
+
+    const maxByRound = new Map<string, number>();
+
+    for (const submission of raw) {
+      for (const entry of submission.vote_entries) {
+        maxByRound.set(
+          submission.round_id,
+          Math.max(
+            maxByRound.get(submission.round_id) ?? 0,
+            entry.points,
+          ),
+        );
+      }
+    }
+
+    const rounds: RoundInfo[] = resolved.rounds.map((round) => ({
+      id: round.id,
+      editionId: round.edition_id,
+      editionName: round.edition_name,
+      name: round.name,
+      participants: round.entry_keys,
+      maxScore: maxByRound.get(round.id) ?? 10,
+      closedAt: round.closed_at,
+    }));
+
+    const ballots: Ballot[] = raw.map((submission) => ({
+      id: submission.id,
+      roundId: submission.round_id,
+      votingCountry: submission.country_code,
+      username: submission.username,
+      createdAt: submission.created_at,
+      status: submission.status ?? "active",
+      deletionCategory: submission.deletion_category,
+      entries: submission.vote_entries.map((entry) => ({
+        target: entry.target_country_code,
+        points: entry.points,
+      })),
+    }));
+
+    const times = ballots
+      .map((ballot) => ballot.createdAt)
+      .filter(Boolean)
+      .sort();
+
+    let moderationQuery = supabaseAdmin
+      .from("vote_moderation_events" as any)
+      .select(
+        "id,voting_country_code,target_country_code,action,reason_category,performed_at,performed_by_username,moderator_note",
+      )
+      .order("performed_at", { ascending: false })
+      .limit(2000);
+
+    if (data.scope.mode !== "all_editions" && times.length > 0) {
+      moderationQuery = moderationQuery
+        .gte("performed_at", times[0])
+        .lte("performed_at", times[times.length - 1]);
+    }
+
+    const { data: moderationRows, error: moderationError } =
+      await moderationQuery;
+
+    if (moderationError) throw new Error(moderationError.message);
+
+    const history: ModerationHistoryRow[] = (
+      (moderationRows ?? []) as any[]
+    ).map((row) => ({
+      votingCountry: String(row.voting_country_code ?? ""),
+      targetCountry: row.target_country_code
+        ? String(row.target_country_code)
+        : null,
+      action: String(row.action ?? ""),
+      reasonCategory: row.reason_category
+        ? String(row.reason_category)
+        : null,
+      performedAt: String(row.performed_at),
+    }));
+
+    const result = analyse({
+      rounds,
+      ballots,
+      moderationHistory: history,
+      settings,
+    });
+
+    const storedByPair = new Map(
+      ((storedRows ?? []) as any[]).map((row) => [
+        `${row.voting_country_code}>${row.target_country_code}`,
+        row,
+      ]),
+    );
+
+    const relationships: ScopedFriendRelationship[] =
+      result.relationships
+        .filter((relationship) => relationship.sharedOpportunities > 0)
+        .map((relationship) => {
+          const stored = storedByPair.get(
+            `${relationship.votingCountry}>${relationship.targetCountry}`,
+          ) as any;
+
+          return {
+            id: stored?.id ? String(stored.id) : null,
+            voting_country_code: relationship.votingCountry,
+            target_country_code: relationship.targetCountry,
+            shared_opportunities: relationship.sharedOpportunities,
+            support_count: relationship.supportCount,
+            maximum_score_count: relationship.maximumScoreCount,
+            active_maximum_score_count:
+              relationship.activeMaximumScoreCount,
+            deleted_maximum_score_count:
+              relationship.deletedMaximumScoreCount,
+            average_points: relationship.averagePoints,
+            support_frequency: relationship.supportFrequency,
+            top_three_frequency: relationship.topThreeFrequency,
+            maximum_score_frequency:
+              relationship.maximumScoreFrequency,
+            preference_lift: relationship.preferenceLift,
+            audience_uplift: relationship.audienceUplift,
+            longest_support_streak:
+              relationship.longestSupportStreak,
+            editions_count: relationship.editionsCount,
+            rounds_count: relationship.roundsCount,
+            reciprocity_score: relationship.reciprocityScore,
+            clique_score: relationship.cliqueScore,
+            previous_friend_vote_deletions:
+              relationship.previousFriendVoteDeletions,
+            repeated_after_moderation:
+              relationship.repeatedAfterModeration,
+            risk_score: relationship.riskScore,
+            risk_label: relationship.riskLabel,
+            reasons: relationship.reasons,
+            review_status: stored?.review_status ?? "new",
+            moderator_note: stored?.moderator_note ?? null,
+            timeline: relationship.timeline,
+          };
+        });
+
+    const groups: ScopedFriendGroup[] = result.groups.map((group) => ({
+      label: group.label,
+      members: group.members,
+      internal_point_share: group.internalPointShare,
+      internal_top_three_share: group.internalTopThreeShare,
+      internal_maximum_share: group.internalMaximumShare,
+      group_reciprocity: group.groupReciprocity,
+      editions_observed: group.editionsObserved,
+      rounds_observed: group.roundsObserved,
+      strong_internal_edges: group.strongInternalEdges,
+      average_internal_support: group.averageInternalSupport,
+      average_external_support: group.averageExternalSupport,
+      deleted_internal_ballots: group.deletedInternalBallots,
+      repeated_after_moderation: group.repeatedAfterModeration,
+      risk_score: group.riskScore,
+      risk_label: group.riskLabel,
+      reasons: group.reasons,
+    }));
+
+    return {
+      editions: resolved.editions,
+      rounds: resolved.rounds,
+      relationships,
+      groups,
+      moderationEvents: (moderationRows ?? []) as any[],
+    };
+  });
