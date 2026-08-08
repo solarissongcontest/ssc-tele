@@ -73,9 +73,13 @@ function ResultsPage() {
   const {
     data: rounds,
     isLoading: roundsLoading,
+    error: roundsError,
   } = useAllRounds();
 
-  const { data: countries } = useAllCountries();
+  const {
+    data: countries,
+    error: countriesError,
+  } = useAllCountries();
 
   const [roundId, setRoundId] =
     useState<string | null>(null);
@@ -85,19 +89,22 @@ function ResultsPage() {
 
   const effective =
     roundId ??
-    rounds?.find(
-      (round) => round.status === "open",
-    )?.id ??
+    rounds?.find((round) => round.status === "open")?.id ??
     rounds?.[0]?.id ??
     null;
 
-  const { subs, entries } = useRoundResults(
+  const roundResults = useRoundResults(
     effective,
     includeDeleted,
   );
 
-  const { data: roundEntries = [] } =
-    useRoundEntries(effective);
+  const { subs, entries } = roundResults;
+
+  const {
+    data: roundEntries = [],
+    error: roundEntriesError,
+    isLoading: roundEntriesLoading,
+  } = useRoundEntries(effective);
 
   const byEntryKey = useMemo(
     () => entryMap(roundEntries),
@@ -115,12 +122,12 @@ function ResultsPage() {
   }, [countries]);
 
   const round =
-    rounds?.find(
-      (item) => item.id === effective,
-    ) ?? null;
+    rounds?.find((item) => item.id === effective) ?? null;
 
-  const participantPlural =
-    entryNoun(roundEntries, true);
+  const participantPlural = entryNoun(
+    roundEntries,
+    true,
+  );
 
   const scoreboard = useMemo(() => {
     const totals = new Map<
@@ -139,8 +146,7 @@ function ResultsPage() {
     );
 
     for (const voteEntry of entries.data ?? []) {
-      const entryKey =
-        voteEntry.target_country_code;
+      const entryKey = voteEntry.target_country_code;
 
       const current =
         totals.get(entryKey) ?? {
@@ -151,9 +157,7 @@ function ResultsPage() {
       current.points += voteEntry.points;
 
       const submission =
-        submissionMap.get(
-          voteEntry.submission_id,
-        );
+        submissionMap.get(voteEntry.submission_id);
 
       if (submission) {
         current.voters.add(
@@ -166,8 +170,7 @@ function ResultsPage() {
 
     return Array.from(totals.entries())
       .map(([entryKey, value]) => {
-        const entry =
-          byEntryKey.get(entryKey);
+        const entry = byEntryKey.get(entryKey);
 
         return {
           entryKey,
@@ -185,11 +188,7 @@ function ResultsPage() {
           b.voters - a.voters ||
           a.name.localeCompare(b.name),
       );
-  }, [
-    entries.data,
-    subs.data,
-    byEntryKey,
-  ]);
+  }, [entries.data, subs.data, byEntryKey]);
 
   const entriesBySubmission = useMemo(() => {
     const map = new Map<
@@ -202,18 +201,12 @@ function ResultsPage() {
       }[]
     >();
 
-    for (const voteEntry of
-      entries.data ?? []) {
+    for (const voteEntry of entries.data ?? []) {
       const current =
-        map.get(
-          voteEntry.submission_id,
-        ) ?? [];
+        map.get(voteEntry.submission_id) ?? [];
 
-      const entryKey =
-        voteEntry.target_country_code;
-
-      const entry =
-        byEntryKey.get(entryKey);
+      const entryKey = voteEntry.target_country_code;
+      const entry = byEntryKey.get(entryKey);
 
       current.push({
         entryKey,
@@ -224,10 +217,7 @@ function ResultsPage() {
         points: voteEntry.points,
       });
 
-      map.set(
-        voteEntry.submission_id,
-        current,
-      );
+      map.set(voteEntry.submission_id, current);
     }
 
     for (const values of map.values()) {
@@ -243,25 +233,21 @@ function ResultsPage() {
 
   const refresh = () => {
     void qc.invalidateQueries({
-      queryKey: [
-        "round-results",
-        effective,
-      ],
+      queryKey: ["round-results"],
     });
 
     void qc.invalidateQueries({
-      queryKey: [
-        "round-entries-resolved",
-        effective,
-      ],
+      queryKey: ["round-entries-resolved"],
+    });
+
+    void qc.invalidateQueries({
+      queryKey: ["all-rounds"],
     });
   };
 
   const exportOverallCSV = () => {
     downloadCSV(
-      `solaris-${slug(
-        round?.name,
-      )}-scoreboard.csv`,
+      `solaris-${slug(round?.name)}-scoreboard.csv`,
       scoreboard.map((row, index) => ({
         rank: index + 1,
         entry_key: row.entryKey,
@@ -273,55 +259,39 @@ function ResultsPage() {
   };
 
   const exportDetailedCSV = () => {
-    const rows: Record<
-      string,
-      unknown
-    >[] = [];
+    const rows: Record<string, unknown>[] = [];
 
-    for (const submission of
-      subs.data ?? []) {
+    for (const submission of subs.data ?? []) {
       const home =
-        byCountryCode.get(
-          submission.country_code,
-        );
+        byCountryCode.get(submission.country_code);
 
       const breakdown =
-        entriesBySubmission.get(
-          submission.id,
-        ) ?? [];
+        entriesBySubmission.get(submission.id) ?? [];
 
       for (const item of breakdown) {
         rows.push({
           submission_id: submission.id,
           username: submission.username,
           home_country:
-            home?.name ??
-            submission.country_code,
-          home_code:
-            submission.country_code,
-          submitted_at:
-            submission.created_at,
+            home?.name ?? submission.country_code,
+          home_code: submission.country_code,
+          submitted_at: submission.created_at,
           target_entry: item.name,
-          target_entry_key:
-            item.entryKey,
+          target_entry_key: item.entryKey,
           points: item.points,
         });
       }
     }
 
     downloadCSV(
-      `solaris-${slug(
-        round?.name,
-      )}-detailed.csv`,
+      `solaris-${slug(round?.name)}-detailed.csv`,
       rows,
     );
   };
 
   const exportExcel = () => {
     downloadExcel(
-      `solaris-${slug(
-        round?.name,
-      )}-scoreboard.xls`,
+      `solaris-${slug(round?.name)}-scoreboard.xls`,
       scoreboard.map((row, index) => ({
         Rank: index + 1,
         Entry: row.name,
@@ -334,46 +304,44 @@ function ResultsPage() {
 
   const exportJSONFile = () => {
     downloadJSON(
-      `solaris-${slug(
-        round?.name,
-      )}-results.json`,
+      `solaris-${slug(round?.name)}-results.json`,
       {
         round: round
           ? {
               id: round.id,
               name: round.name,
               status: round.status,
-              edition:
-                round.edition_name,
-              participant_mode:
-                round.participant_mode,
+              edition: round.edition_name,
+              participant_mode: round.participant_mode,
             }
           : null,
 
         scoreboard,
 
-        submissions: (
-          subs.data ?? []
-        ).map((submission) => ({
-          ...submission,
-          breakdown:
-            entriesBySubmission.get(
-              submission.id,
-            ) ?? [],
-        })),
+        submissions: (subs.data ?? []).map(
+          (submission) => ({
+            ...submission,
+            breakdown:
+              entriesBySubmission.get(submission.id) ??
+              [],
+          }),
+        ),
       },
     );
   };
 
-  const totalVotes =
-    subs.data?.length ?? 0;
+  const totalVotes = subs.data?.length ?? 0;
 
-  const totalPoints =
-    scoreboard.reduce(
-      (sum, row) =>
-        sum + row.points,
-      0,
-    );
+  const totalPoints = scoreboard.reduce(
+    (sum, row) => sum + row.points,
+    0,
+  );
+
+  const loadError =
+    roundsError ??
+    countriesError ??
+    roundEntriesError ??
+    roundResults.error;
 
   return (
     <AdminShell title="Results">
@@ -385,34 +353,28 @@ function ResultsPage() {
             </p>
 
             <Select
-              value={
-                effective ?? undefined
-              }
-              onValueChange={(value) =>
-                setRoundId(value)
-              }
+              value={effective ?? undefined}
+              onValueChange={setRoundId}
             >
               <SelectTrigger className="w-[320px] max-w-full">
                 <SelectValue placeholder="Select round" />
               </SelectTrigger>
 
               <SelectContent>
-                {(rounds ?? []).map(
-                  (item) => (
-                    <SelectItem
-                      key={item.id}
-                      value={item.id}
-                    >
-                      {item.edition_name
-                        ? `${item.edition_name} · `
-                        : ""}
-                      {item.name}
-                      {item.status === "open"
-                        ? " · Open"
-                        : ""}
-                    </SelectItem>
-                  ),
-                )}
+                {(rounds ?? []).map((item) => (
+                  <SelectItem
+                    key={item.id}
+                    value={item.id}
+                  >
+                    {item.edition_name
+                      ? `${item.edition_name} · `
+                      : ""}
+                    {item.name}
+                    {item.status === "open"
+                      ? " · Open"
+                      : ""}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -430,7 +392,6 @@ function ResultsPage() {
                   (value) => !value,
                 )
               }
-              title="When on, deleted ballots are included in totals"
             >
               {includeDeleted
                 ? "Including deleted"
@@ -447,12 +408,11 @@ function ResultsPage() {
             </Button>
 
             <DropdownMenu>
-              <DropdownMenuTrigger
-                asChild
-              >
+              <DropdownMenuTrigger asChild>
                 <Button
                   size="sm"
                   className="bg-hero text-primary-foreground"
+                  disabled={scoreboard.length === 0}
                 >
                   <Download className="h-4 w-4" />
                   Export
@@ -461,18 +421,14 @@ function ResultsPage() {
 
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  onClick={
-                    exportOverallCSV
-                  }
+                  onClick={exportOverallCSV}
                 >
                   <Download className="h-4 w-4" />
                   CSV · overall
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
-                  onClick={
-                    exportDetailedCSV
-                  }
+                  onClick={exportDetailedCSV}
                 >
                   <Download className="h-4 w-4" />
                   CSV · detailed
@@ -486,9 +442,7 @@ function ResultsPage() {
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
-                  onClick={
-                    exportJSONFile
-                  }
+                  onClick={exportJSONFile}
                 >
                   <FileJson className="h-4 w-4" />
                   JSON
@@ -497,6 +451,13 @@ function ResultsPage() {
             </DropdownMenu>
           </div>
         </div>
+
+        {loadError ? (
+          <ErrorPanel
+            error={loadError}
+            onRetry={refresh}
+          />
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat
@@ -510,20 +471,13 @@ function ResultsPage() {
           />
 
           <Stat
-            label={`${
-              participantPlural[0]?.toUpperCase() ??
-              ""
-            }${participantPlural.slice(
-              1,
-            )} scored`}
+            label={`${capitalize(participantPlural)} scored`}
             value={scoreboard.length}
           />
 
           <Stat
             label="Round status"
-            value={
-              round?.status ?? "—"
-            }
+            value={round?.status ?? "—"}
             valueClass={
               round?.status === "open"
                 ? "text-primary"
@@ -533,14 +487,15 @@ function ResultsPage() {
         </div>
 
         {roundsLoading ||
-        subs.isLoading ? (
+        subs.isLoading ||
+        roundEntriesLoading ? (
           <Loading />
         ) : !effective ? (
           <Empty
             title="No rounds yet"
             body="Create a round to see results here."
           />
-        ) : (
+        ) : !loadError ? (
           <>
             <section className="glass-strong overflow-hidden rounded-2xl">
               <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
@@ -555,78 +510,68 @@ function ResultsPage() {
                   variant="outline"
                   className="tabular-nums"
                 >
-                  {scoreboard.length}{" "}
-                  {participantPlural}
+                  {scoreboard.length} {participantPlural}
                 </Badge>
               </header>
 
-              {scoreboard.length ===
-              0 ? (
+              {scoreboard.length === 0 ? (
                 <Empty
-                  body="No votes yet. The scoreboard will update as votes come in."
+                  body={
+                    totalVotes > 0
+                      ? "Ballots were found, but no vote entries were returned. Use Refresh, and if this persists the page will now show the underlying server error above."
+                      : "No votes yet for this round."
+                  }
                   plain
                 />
               ) : (
                 <ol className="divide-y divide-border">
-                  {scoreboard.map(
-                    (row, index) => {
-                      const rank =
-                        index + 1;
+                  {scoreboard.map((row, index) => {
+                    const rank = index + 1;
 
-                      return (
-                        <li
-                          key={
-                            row.entryKey
-                          }
+                    return (
+                      <li
+                        key={row.entryKey}
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-3 sm:px-5",
+                          rank <= 3 && "bg-primary/5",
+                        )}
+                      >
+                        <span
                           className={cn(
-                            "flex items-center gap-3 px-4 py-3 sm:px-5",
-                            rank <= 3 &&
-                              "bg-primary/5",
+                            "w-7 text-center font-bold tabular-nums",
+                            rank === 1 &&
+                              "text-lg text-primary",
+                            rank > 3 &&
+                              "text-muted-foreground",
                           )}
                         >
-                          <span
-                            className={cn(
-                              "w-7 text-center font-bold tabular-nums",
-                              rank === 1 &&
-                                "text-lg text-primary",
-                              rank === 2 &&
-                                "text-foreground",
-                              rank === 3 &&
-                                "text-foreground/80",
-                              rank > 3 &&
-                                "text-muted-foreground",
-                            )}
-                          >
-                            {rank}
+                          {rank}
+                        </span>
+
+                        <EntryAvatar
+                          entry={row.entry}
+                          size={32}
+                        />
+
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">
+                            {row.name}
                           </span>
 
-                          <EntryAvatar
-                            entry={
-                              row.entry
-                            }
-                            size={32}
-                          />
-
-                          <span className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium">
-                              {row.name}
-                            </div>
-
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              {row.voters}{" "}
-                              {row.voters === 1
-                                ? "voter"
-                                : "voters"}
-                            </div>
+                          <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+                            {row.voters}{" "}
+                            {row.voters === 1
+                              ? "voter"
+                              : "voters"}
                           </span>
+                        </span>
 
-                          <span className="text-lg font-bold tabular-nums text-primary">
-                            {row.points}
-                          </span>
-                        </li>
-                      );
-                    },
-                  )}
+                        <span className="text-lg font-bold tabular-nums text-primary">
+                          {row.points}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </section>
@@ -642,8 +587,7 @@ function ResultsPage() {
                 </p>
               </header>
 
-              {(subs.data ?? [])
-                .length === 0 ? (
+              {(subs.data ?? []).length === 0 ? (
                 <Empty
                   body="No submissions yet."
                   plain
@@ -663,84 +607,58 @@ function ResultsPage() {
                         ) ?? [];
 
                       return (
-                        <li
-                          key={
-                            submission.id
-                          }
-                        >
+                        <li key={submission.id}>
                           <Collapsible>
-                            <CollapsibleTrigger className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-card/40 sm:px-5">
+                            <CollapsibleTrigger className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-card/40 sm:px-5">
                               <CountryFlag
-                                country={
-                                  home
-                                }
+                                country={home}
                                 size={24}
                               />
 
                               <span className="min-w-0 flex-1">
-                                <div className="truncate text-sm font-medium">
-                                  {
-                                    submission.username
-                                  }
-                                </div>
+                                <span className="block truncate text-sm font-medium">
+                                  {submission.username}
+                                </span>
 
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                                  {countryName(
-                                    home,
-                                  )}{" "}
-                                  ·{" "}
+                                <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+                                  {countryName(home)} ·{" "}
                                   {new Date(
                                     submission.created_at,
                                   ).toLocaleString()}
-                                </div>
+                                </span>
                               </span>
 
                               <Badge
                                 variant="outline"
                                 className="tabular-nums"
                               >
-                                {
-                                  breakdown.length
-                                }{" "}
-                                picks
+                                {breakdown.length} picks
                               </Badge>
 
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
                             </CollapsibleTrigger>
 
                             <CollapsibleContent>
-                              <div className="grid grid-cols-2 gap-1.5 px-4 pb-3 sm:grid-cols-3 sm:px-5">
-                                {breakdown.map(
-                                  (item) => (
-                                    <div
-                                      key={
-                                        item.entryKey
-                                      }
-                                      className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-2 py-1.5"
-                                    >
-                                      <EntryAvatar
-                                        entry={
-                                          item.entry
-                                        }
-                                        size={
-                                          20
-                                        }
-                                      />
+                              <div className="grid grid-cols-1 gap-1.5 px-4 pb-3 sm:grid-cols-2 lg:grid-cols-3 sm:px-5">
+                                {breakdown.map((item) => (
+                                  <div
+                                    key={item.entryKey}
+                                    className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-2 py-2"
+                                  >
+                                    <EntryAvatar
+                                      entry={item.entry}
+                                      size={20}
+                                    />
 
-                                      <span className="min-w-0 flex-1 truncate text-xs">
-                                        {
-                                          item.name
-                                        }
-                                      </span>
+                                    <span className="min-w-0 flex-1 truncate text-xs">
+                                      {item.name}
+                                    </span>
 
-                                      <span className="text-xs font-bold tabular-nums text-primary">
-                                        {
-                                          item.points
-                                        }
-                                      </span>
-                                    </div>
-                                  ),
-                                )}
+                                    <span className="text-xs font-bold tabular-nums text-primary">
+                                      {item.points}
+                                    </span>
+                                  </div>
+                                ))}
                               </div>
                             </CollapsibleContent>
                           </Collapsible>
@@ -752,7 +670,7 @@ function ResultsPage() {
               )}
             </section>
           </>
-        )}
+        ) : null}
       </div>
     </AdminShell>
   );
@@ -794,6 +712,41 @@ function Loading() {
   );
 }
 
+function ErrorPanel({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry: () => void;
+}) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : String(error);
+
+  return (
+    <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
+      <h3 className="font-semibold text-destructive">
+        Could not load admin results
+      </h3>
+
+      <p className="mt-1 break-words text-sm text-muted-foreground">
+        {message}
+      </p>
+
+      <Button
+        className="mt-3"
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+      >
+        <RefreshCcw className="h-4 w-4" />
+        Retry
+      </Button>
+    </div>
+  );
+}
+
 function Empty({
   title,
   body,
@@ -807,8 +760,7 @@ function Empty({
     <div
       className={cn(
         "space-y-1 p-10 text-center",
-        !plain &&
-          "glass-strong rounded-2xl",
+        !plain && "glass-strong rounded-2xl",
       )}
     >
       {title ? (
@@ -825,11 +777,15 @@ function Empty({
 }
 
 function slug(value?: string | null) {
-  return (
-    value ?? "round"
-  )
+  return (value ?? "round")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function capitalize(value: string) {
+  if (!value) return value;
+
+  return `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
 }
