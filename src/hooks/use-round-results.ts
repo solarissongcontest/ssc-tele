@@ -29,19 +29,21 @@ export type Submission = {
   country_code: string;
   created_at: string;
   risk_score: number;
-  status?: string;
+  status?: string | null;
   ip_country?: string | null;
-  is_vpn?: boolean;
+  is_vpn?: boolean | null;
 };
 
-/**
- * target_country_code is a legacy database column name.
- * Its value is now the stable round entry_key.
- */
 export type Entry = {
   id: string;
   submission_id: string;
+
+  /**
+   * Legacy database column name.
+   * The value is the stable target entry_key.
+   */
   target_country_code: string;
+
   points: number;
 };
 
@@ -60,6 +62,7 @@ export type RoundOption = {
 export function useAllRounds() {
   return useQuery({
     queryKey: ["all-rounds"],
+
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rounds")
@@ -83,6 +86,7 @@ export function useAllRounds() {
 export function useAllCountries() {
   return useQuery({
     queryKey: ["countries"],
+
     queryFn: async () => {
       const { data, error } = await supabase
         .from("countries")
@@ -93,22 +97,17 @@ export function useAllCountries() {
 
       return data as Country[];
     },
+
     staleTime: 60_000,
   });
 }
 
-/**
- * Resolve the configured line-up for a round.
- *
- * Country entries get their country metadata attached; custom entries keep
- * their own name/code/image fields. Every consumer should use entry_key as
- * the stable result/vote identity.
- */
 export function useRoundEntries(roundId: string | null) {
   const qc = useQueryClient();
 
   const query = useQuery({
     queryKey: ["round-entries-resolved", roundId],
+
     queryFn: async (): Promise<ResolvedEntry[]> => {
       if (!roundId) return [];
 
@@ -151,6 +150,7 @@ export function useRoundEntries(roundId: string | null) {
         rawEntries.map((entry) => resolveEntry(entry, countries)),
       );
     },
+
     enabled: Boolean(roundId),
     staleTime: 5_000,
   });
@@ -190,23 +190,28 @@ export function useRoundResults(
 ) {
   const qc = useQueryClient();
   const fetchResults = useServerFn(getRoundResults);
-  const resolvedEntries = useRoundEntries(roundId);
 
   const bundle = useQuery({
     queryKey: ["round-results", roundId, includeDeleted],
+
     queryFn: async () => {
       if (!roundId) return null;
 
       return (await fetchResults({
-        data: { roundId, includeDeleted },
+        data: {
+          roundId,
+          includeDeleted,
+        },
       })) as {
         submissions: Submission[];
         entries: Entry[];
       };
     },
+
     enabled: Boolean(roundId),
     refetchInterval: 5_000,
     refetchOnWindowFocus: true,
+    retry: 1,
   });
 
   useEffect(() => {
@@ -223,7 +228,10 @@ export function useRoundResults(
           filter: `id=eq.${roundId}`,
         },
         () => {
-          void qc.invalidateQueries({ queryKey: ["all-rounds"] });
+          void qc.invalidateQueries({
+            queryKey: ["all-rounds"],
+          });
+
           void qc.invalidateQueries({
             queryKey: ["round-results", roundId],
           });
@@ -240,29 +248,19 @@ export function useRoundResults(
     subs: {
       data: bundle.data?.submissions ?? [],
       isLoading: bundle.isLoading,
+      error: bundle.error,
+      isError: bundle.isError,
     },
+
     entries: {
       data: bundle.data?.entries ?? [],
       isLoading: bundle.isLoading,
+      error: bundle.error,
+      isError: bundle.isError,
     },
 
-    roundEntries: {
-      data: resolvedEntries.data ?? [],
-      isLoading: resolvedEntries.isLoading,
-    },
-
-    // Compatibility only. This is derived from round_entries and never reads
-    // the legacy round_countries table.
-    roundCountries: {
-      data: (resolvedEntries.data ?? [])
-        .filter((entry) => entry.entry_type === "country" && entry.country_code)
-        .map((entry) => ({
-          country_code: entry.country_code as string,
-          display_order: entry.display_order,
-        })),
-      isLoading: resolvedEntries.isLoading,
-    },
-
+    error: bundle.error,
+    isError: bundle.isError,
     refetch: bundle.refetch,
     isLoading: bundle.isLoading,
   };
