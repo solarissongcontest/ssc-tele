@@ -273,15 +273,19 @@ export const setRoundStatus = createServerFn({ method: "POST" })
     );
 
     if (data.status === "open") {
-      const { count } = await supabaseAdmin
-        .from("round_countries")
-        .select("round_id", { count: "exact", head: true })
+      const { count, error: entryCountError } = await supabaseAdmin
+        .from("round_entries" as any)
+        .select("id", { count: "exact", head: true })
         .eq("round_id", data.id);
+
+      if (entryCountError) throw new Error(entryCountError.message);
+
       const c = count ?? 0;
-      if (c < 2 || c > 50)
+      if (c < 2 || c > 50) {
         throw new Error(
-          `Round must have between 2 and 50 countries (has ${c})`,
+          `Round must have between 2 and 50 entries (has ${c})`,
         );
+      }
     }
 
     const patch: {
@@ -357,49 +361,171 @@ export const saveRoundCountries = createServerFn({ method: "POST" })
       throw new Error("Invalid countries");
     if (data.countryCodes.length < 2 || data.countryCodes.length > 50)
       throw new Error("Pick between 2 and 50 countries");
+
     const seen = new Set<string>();
-    for (const c of data.countryCodes) {
-      if (!c || typeof c !== "string") throw new Error("Invalid country code");
-      if (seen.has(c)) throw new Error("Duplicate country in selection");
-      seen.add(c);
+    for (const rawCode of data.countryCodes) {
+      if (!rawCode || typeof rawCode !== "string")
+        throw new Error("Invalid country code");
+
+      const code = rawCode.trim();
+      if (!code) throw new Error("Invalid country code");
+      if (seen.has(code)) throw new Error("Duplicate country in selection");
+      seen.add(code);
     }
-    return data;
+
+    return {
+      roundId: data.roundId,
+      countryCodes: data.countryCodes.map((code) => code.trim()),
+    };
   })
   .handler(async ({ data }) => {
     const actor = await requireAdmin();
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
-    const { data: before } = await supabaseAdmin
-      .from("round_countries")
-      .select("country_code, display_order")
+
+    // Verify the round exists before changing its line-up.
+    const { data: round, error: roundError } = await supabaseAdmin
+      .from("rounds")
+      .select("id,status,participant_mode")
+      .eq("id", data.roundId)
+      .maybeSingle();
+
+    if (roundError) throw new Error(roundError.message);
+    if (!round) throw new Error("Round not found");
+
+    // Do not silently rewrite an actively voting round.
+    if ((round as any).status === "open") {
+      throw new Error("Close the round before changing its participants");
+    }
+
+    // Every selected code must still correspond to a real Solaris country.
+    const { data: validCountries, error: countryError } = await supabaseAdmin
+      .from("countries")
+      .select("code")
+      .in("code", data.countryCodes);
+
+    if (countryError) throw new Error(countryError.message);
+
+    const validCodes = new Set(
+      ((validCountries ?? []) as { code: string }[]).map((row) => row.code),
+    );
+
+    const unknownCodes = data.countryCodes.filter(
+      (code) => !validCodes.has(code),
+    );
+
+    if (unknownCodes.length > 0) {
+      throw new Error(
+        `Unknown country ${unknownCodes.length === 1 ? "code" : "codes"}: ${unknownCodes.join(", ")}`,
+      );
+    }
+
+    // round_entries is now the authoritative participant table.
+    // Existing custom entries are intentionally preserved.
+    const { data: before, error: beforeError } = await supabaseAdmin
+      .from("round_entries" as any)
+      .select(
+        "id,entry_type,entry_key,country_code,custom_name,display_order",
+      )
       .eq("round_id", data.roundId)
       .order("display_order");
 
-    const { error: delErr } = await supabaseAdmin
-      .from("round_countries")
+    if (beforeError) throw new Error(beforeError.message);
+
+    const existingCustomEntries = ((before ?? []) as any[])
+      .filter((entry) => entry.entry_type === "custom")
+      .sort(
+        (a, b) =>
+          Number(a.display_order ?? 0) - Number(b.display_order ?? 0),
+      );
+
+    // Remove only the country entries. Custom entries must survive when a
+    // mixed round's country selection is edited.
+    const { error: deleteError } = await supabaseAdmin
+      .from("round_entries" as any)
       .delete()
-      .eq("round_id", data.roundId);
-    if (delErr) throw new Error(delErr.message);
+      .eq("round_id", data.roundId)
+      .eq("entry_type", "country");
 
-    const rows = data.countryCodes.map((code, i) => ({
+    if (deleteError) throw new Error(deleteError.message);
+
+    // Country entries keep their country code as entry_key. This preserves
+    // compatibility with historical vote/result rows while giving every
+    // participant a stable generic identity.
+    const countryRows = data.countryCodes.map((code, index) => ({
       round_id: data.roundId,
+      entry_type: "country",
+      entry_key: code,
       country_code: code,
-      display_order: i + 1,
+      custom_name: null,
+      short_name: null,
+      entry_code: null,
+      subtitle: null,
+      image_url: null,
+      description: null,
+      display_order: index + 1,
     }));
-    const { error: insErr } = await supabaseAdmin
-      .from("round_countries")
-      .insert(rows);
-    if (insErr) throw new Error(insErr.message);
 
-    await audit(actor, "configure_round_countries", {
+    if (countryRows.length > 0) {
+      const { error: insertError } = await supabaseAdmin
+        .from("round_entries" as any)
+        .insert(countryRows);
+
+      if (insertError) throw new Error(insertError.message);
+    }
+
+    // If this round already contains custom entries, keep their relative order
+    // but place them after the country entries so display_order remains unique
+    // and deterministic until the generic entry editor takes over ordering.
+    if (existingCustomEntries.length > 0) {
+      for (let index = 0; index < existingCustomEntries.length; index += 1) {
+        const custom = existingCustomEntries[index];
+        const { error: reorderError } = await supabaseAdmin
+          .from("round_entries" as any)
+          .update({
+            display_order: countryRows.length + index + 1,
+          })
+          .eq("id", custom.id);
+
+        if (reorderError) throw new Error(reorderError.message);
+      }
+    }
+
+    // Keep participant_mode truthful. If custom entries already exist, the
+    // round is mixed. Otherwise this editor is configuring a country round.
+    const participantMode =
+      existingCustomEntries.length > 0 ? "mixed" : "countries";
+
+    const { error: modeError } = await supabaseAdmin
+      .from("rounds")
+      .update({ participant_mode: participantMode })
+      .eq("id", data.roundId);
+
+    if (modeError) throw new Error(modeError.message);
+
+    const after = [
+      ...countryRows,
+      ...existingCustomEntries.map((entry, index) => ({
+        ...entry,
+        display_order: countryRows.length + index + 1,
+      })),
+    ];
+
+    await audit(actor, "configure_round_entries", {
       target_type: "round",
       target_id: data.roundId,
       old_values: before,
-      new_values: rows.map((r) => ({
-        country_code: r.country_code,
-        display_order: r.display_order,
-      })),
+      new_values: {
+        participant_mode: participantMode,
+        entries: after,
+      },
     });
-    return { ok: true, count: rows.length };
+
+    return {
+      ok: true,
+      count: after.length,
+      countryCount: countryRows.length,
+      customCount: existingCustomEntries.length,
+    };
   });
