@@ -1,31 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   BarChart3,
   Download,
   Loader2,
   RefreshCcw,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 
 import { AdminShell } from "@/components/admin-shell";
+import { AnalysisScopePicker } from "@/components/analysis-scope-picker";
 import { CountryFlag, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
 import { EntryAvatar } from "@/components/entry-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useEntryKeyCatalog } from "@/hooks/use-entry-key-catalog";
+import { useAllCountries } from "@/hooks/use-round-results";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useRoundEntryCatalog } from "@/hooks/use-entry-key-catalog";
+  getScopedAnalytics,
+} from "@/lib/analysis-scope.functions";
 import {
-  useAllCountries,
-  useAllRounds,
-  useRoundResults,
-} from "@/hooks/use-round-results";
+  DEFAULT_ANALYSIS_SCOPE,
+  analysisScopeKey,
+  type AnalysisScope,
+} from "@/lib/analysis-scope";
 import { downloadCSV, downloadExcel } from "@/lib/export";
 import {
   entryMap,
@@ -48,54 +47,89 @@ export const Route = createFileRoute("/admin/analytics")({
 });
 
 function AnalyticsPage() {
-  const qc = useQueryClient();
+  const scopedFn = useServerFn(getScopedAnalytics);
+  const { data: countries = [] } = useAllCountries();
 
-  const { data: rounds } = useAllRounds();
-  const { data: countries } = useAllCountries();
+  const [scope, setScope] =
+    useState<AnalysisScope>(DEFAULT_ANALYSIS_SCOPE);
 
-  const [roundId, setRoundId] = useState<string | null>(null);
+  const scoped = useQuery({
+    queryKey: ["scoped-analytics", analysisScopeKey(scope)],
+    queryFn: () =>
+      scopedFn({
+        data: { scope },
+      }),
+  });
 
-  const effective =
-    roundId ??
-    rounds?.find((round) => round.status === "open")?.id ??
-    rounds?.[0]?.id ??
-    null;
+  const submissions = scoped.data?.submissions ?? [];
+  const entries = scoped.data?.entries ?? [];
 
-  const { subs, entries } = useRoundResults(effective);
-  const { data: roundEntries = [] } = useRoundEntryCatalog(effective);
+  const activeSubmissions = useMemo(
+    () =>
+      submissions.filter(
+        (submission) => submission.status !== "deleted",
+      ),
+    [submissions],
+  );
+
+  const activeSubmissionIds = useMemo(
+    () => new Set(activeSubmissions.map((submission) => submission.id)),
+    [activeSubmissions],
+  );
+
+  const activeEntries = useMemo(
+    () =>
+      entries.filter((entry) =>
+        activeSubmissionIds.has(entry.submission_id),
+      ),
+    [entries, activeSubmissionIds],
+  );
+
+  const targetKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          activeEntries
+            .map((entry) => entry.target_entry_key)
+            .filter(Boolean),
+        ),
+      ),
+    [activeEntries],
+  );
+
+  const { data: resolvedEntries = [] } =
+    useEntryKeyCatalog(targetKeys);
 
   const byEntryKey = useMemo(
-    () => entryMap(roundEntries),
-    [roundEntries],
+    () => entryMap(resolvedEntries),
+    [resolvedEntries],
   );
 
   const byCountryCode = useMemo(() => {
     const map = new Map<string, CountryRow>();
 
-    for (const country of countries ?? []) {
+    for (const country of countries) {
       map.set(country.code, country);
     }
 
     return map;
   }, [countries]);
 
-  const round = rounds?.find((item) => item.id === effective);
-
-  const subList = subs.data ?? [];
-  const entryList = entries.data ?? [];
-
-  const subMap = useMemo(
-    () => new Map(subList.map((submission) => [submission.id, submission])),
-    [subList],
+  const submissionMap = useMemo(
+    () =>
+      new Map(
+        activeSubmissions.map((submission) => [
+          submission.id,
+          submission,
+        ]),
+      ),
+    [activeSubmissions],
   );
 
-  /*
-   * VOTER identity remains a Solaris country.
-   */
   const votersByHome = useMemo(() => {
     const totals = new Map<string, number>();
 
-    for (const submission of subList) {
+    for (const submission of activeSubmissions) {
       totals.set(
         submission.country_code,
         (totals.get(submission.country_code) ?? 0) + 1,
@@ -105,36 +139,29 @@ function AnalyticsPage() {
     return Array.from(totals.entries())
       .map(([code, count]) => ({
         code,
-        name: byCountryCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
+        name:
+          byCountryCode.get(code)?.name ??
+          UNKNOWN_COUNTRY_NAME,
         flag: byCountryCode.get(code)?.flag ?? "🏳️",
         country: byCountryCode.get(code) ?? null,
         count,
       }))
       .sort((a, b) => b.count - a.count);
-  }, [subList, byCountryCode]);
+  }, [activeSubmissions, byCountryCode]);
 
-  /*
-   * TARGET identity is a stable entry_key.
-   * `target_country_code` is only the legacy DB column name.
-   */
   const avgPerTarget = useMemo(() => {
     const totals = new Map<
       string,
       { sum: number; count: number }
     >();
 
-    for (const voteEntry of entryList) {
-      const entryKey = voteEntry.target_country_code;
-
+    for (const voteEntry of activeEntries) {
+      const entryKey = voteEntry.target_entry_key;
       const current =
-        totals.get(entryKey) ?? {
-          sum: 0,
-          count: 0,
-        };
+        totals.get(entryKey) ?? { sum: 0, count: 0 };
 
       current.sum += voteEntry.points;
       current.count += 1;
-
       totals.set(entryKey, current);
     }
 
@@ -154,34 +181,40 @@ function AnalyticsPage() {
         };
       })
       .sort((a, b) => b.avg - a.avg);
-  }, [entryList, byEntryKey]);
+  }, [activeEntries, byEntryKey]);
 
-  /*
-   * Bloc behaviour is country voter -> generic target entry.
-   */
   const blocs = useMemo(() => {
     const totals = new Map<string, Map<string, number>>();
 
-    for (const voteEntry of entryList) {
-      const submission = subMap.get(voteEntry.submission_id);
+    for (const voteEntry of activeEntries) {
+      const submission = submissionMap.get(
+        voteEntry.submission_id,
+      );
+
       if (!submission) continue;
 
       const targetMap =
-        totals.get(submission.country_code) ?? new Map<string, number>();
-
-      const entryKey = voteEntry.target_country_code;
+        totals.get(submission.country_code) ??
+        new Map<string, number>();
 
       targetMap.set(
-        entryKey,
-        (targetMap.get(entryKey) ?? 0) + voteEntry.points,
+        voteEntry.target_entry_key,
+        (targetMap.get(voteEntry.target_entry_key) ?? 0) +
+          voteEntry.points,
       );
 
       totals.set(submission.country_code, targetMap);
     }
 
     return Array.from(totals.entries())
-      .map(([fromCountryCode, targetMap]) => {
-        const top = Array.from(targetMap.entries())
+      .map(([fromCountryCode, targetMap]) => ({
+        from: fromCountryCode,
+        fromName:
+          byCountryCode.get(fromCountryCode)?.name ??
+          UNKNOWN_COUNTRY_NAME,
+        fromCountry:
+          byCountryCode.get(fromCountryCode) ?? null,
+        top: Array.from(targetMap.entries())
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3)
           .map(([entryKey, points]) => {
@@ -195,47 +228,36 @@ function AnalyticsPage() {
                 : entryKey,
               points,
             };
-          });
-
-        return {
-          from: fromCountryCode,
-          fromName:
-            byCountryCode.get(fromCountryCode)?.name ??
-            UNKNOWN_COUNTRY_NAME,
-          fromCountry: byCountryCode.get(fromCountryCode) ?? null,
-          top,
-        };
-      })
+          }),
+      }))
       .sort((a, b) => a.fromName.localeCompare(b.fromName));
-  }, [entryList, subMap, byCountryCode, byEntryKey]);
+  }, [
+    activeEntries,
+    submissionMap,
+    byCountryCode,
+    byEntryKey,
+  ]);
 
   const histogram = useMemo(() => {
     const bins = new Array(10).fill(0);
 
-    for (const voteEntry of entryList) {
+    for (const voteEntry of activeEntries) {
       if (voteEntry.points >= 1 && voteEntry.points <= 10) {
         bins[voteEntry.points - 1] += 1;
       }
     }
 
     return bins;
-  }, [entryList]);
+  }, [activeEntries]);
 
   const timeline = useMemo(() => {
-    if (subList.length === 0) {
-      return [] as {
-        t: number;
-        label: string;
-        n: number;
-      }[];
-    }
-
     const buckets = new Map<number, number>();
 
-    for (const submission of subList) {
+    for (const submission of activeSubmissions) {
       const minute =
-        Math.floor(new Date(submission.created_at).getTime() / 60_000) *
-        60_000;
+        Math.floor(
+          new Date(submission.created_at).getTime() / 60_000,
+        ) * 60_000;
 
       buckets.set(minute, (buckets.get(minute) ?? 0) + 1);
     }
@@ -245,12 +267,14 @@ function AnalyticsPage() {
       .map(([t, n]) => ({
         t,
         n,
-        label: new Date(t).toLocaleTimeString([], {
+        label: new Date(t).toLocaleString([], {
+          month: "short",
+          day: "numeric",
           hour: "2-digit",
           minute: "2-digit",
         }),
       }));
-  }, [subList]);
+  }, [activeSubmissions]);
 
   const statusCounts = useMemo(() => {
     const counts = {
@@ -260,17 +284,15 @@ function AnalyticsPage() {
       deleted: 0,
     };
 
-    for (const submission of subList) {
+    for (const submission of submissions) {
       const key =
         (submission.status ?? "active") as keyof typeof counts;
 
-      if (key in counts) {
-        counts[key] += 1;
-      }
+      if (key in counts) counts[key] += 1;
     }
 
     return counts;
-  }, [subList]);
+  }, [submissions]);
 
   const uniqueStats = useMemo(() => {
     const users = new Set<string>();
@@ -279,7 +301,7 @@ function AnalyticsPage() {
     let vpn = 0;
     let mismatch = 0;
 
-    for (const submission of subList) {
+    for (const submission of activeSubmissions) {
       users.add(submission.username_normalized);
       homeCountries.add(submission.country_code);
 
@@ -300,7 +322,7 @@ function AnalyticsPage() {
       vpn,
       mismatch,
     };
-  }, [subList]);
+  }, [activeSubmissions]);
 
   const riskDistribution = useMemo(() => {
     const bins = {
@@ -310,7 +332,7 @@ function AnalyticsPage() {
       critical: 0,
     };
 
-    for (const submission of subList) {
+    for (const submission of activeSubmissions) {
       const risk = submission.risk_score ?? 0;
 
       if (risk >= 70) bins.critical += 1;
@@ -320,15 +342,17 @@ function AnalyticsPage() {
     }
 
     return bins;
-  }, [subList]);
+  }, [activeSubmissions]);
 
   const exportRows = () =>
-    subList.map((submission) => {
-      const ballotEntries = entryList.filter(
+    activeSubmissions.map((submission) => {
+      const ballotEntries = activeEntries.filter(
         (entry) => entry.submission_id === submission.id,
       );
 
       return {
+        edition: submission.edition_name,
+        round: submission.round_name,
         username: submission.username,
         home_country: submission.country_code,
         ip_country: submission.ip_country ?? "",
@@ -341,62 +365,46 @@ function AnalyticsPage() {
         ),
         entries: ballotEntries
           .map((entry) => {
-            const entryKey = entry.target_country_code;
-            const resolved = byEntryKey.get(entryKey);
-            const displayName = resolved
-              ? getEntryDisplayName(resolved)
-              : entryKey;
+            const resolved = byEntryKey.get(
+              entry.target_entry_key,
+            );
 
-            return `${displayName} [${entryKey}]:${entry.points}`;
+            const name = resolved
+              ? getEntryDisplayName(resolved)
+              : entry.target_entry_key;
+
+            return `${name} [${entry.target_entry_key}]:${entry.points}`;
           })
           .join("|"),
         submitted_at: submission.created_at,
       };
     });
 
-  const refresh = () => {
-    void qc.invalidateQueries({
-      queryKey: ["round-results", effective],
-    });
-
-    void qc.invalidateQueries({
-      queryKey: ["round-entry-catalog", effective],
-    });
-  };
-
   return (
     <AdminShell title="Analytics">
       <div className="space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-widest text-primary">
-              Round
-            </p>
+        <AnalysisScopePicker
+          value={scope}
+          onChange={setScope}
+        />
 
-            <Select
-              value={effective ?? undefined}
-              onValueChange={setRoundId}
-            >
-              <SelectTrigger className="w-[320px] max-w-full">
-                <SelectValue placeholder="Select round" />
-              </SelectTrigger>
-
-              <SelectContent>
-                {(rounds ?? []).map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.edition_name
-                      ? `${item.edition_name} · `
-                      : ""}
-                    {item.name}
-                    {item.status === "open" ? " · Open" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs text-muted-foreground">
+            {scoped.data
+              ? `${scoped.data.editions.length} edition${
+                  scoped.data.editions.length === 1 ? "" : "s"
+                } · ${scoped.data.rounds.length} round${
+                  scoped.data.rounds.length === 1 ? "" : "s"
+                }`
+              : "Loading scope…"}
           </div>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={refresh}>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => scoped.refetch()}
+            >
               <RefreshCcw className="h-4 w-4" />
               Refresh
             </Button>
@@ -404,9 +412,12 @@ function AnalyticsPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled={subList.length === 0}
+              disabled={activeSubmissions.length === 0}
               onClick={() =>
-                downloadCSV(`analytics-${effective}.csv`, exportRows())
+                downloadCSV(
+                  `analytics-${analysisScopeKey(scope)}.csv`,
+                  exportRows(),
+                )
               }
             >
               <Download className="h-4 w-4" />
@@ -416,9 +427,12 @@ function AnalyticsPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled={subList.length === 0}
+              disabled={activeSubmissions.length === 0}
               onClick={() =>
-                downloadExcel(`analytics-${effective}.xls`, exportRows())
+                downloadExcel(
+                  `analytics-${analysisScopeKey(scope)}.xls`,
+                  exportRows(),
+                )
               }
             >
               <Download className="h-4 w-4" />
@@ -427,14 +441,21 @@ function AnalyticsPage() {
           </div>
         </div>
 
-        {!effective ? (
-          <Empty body="Create or select a round to see analytics." />
-        ) : subs.isLoading ? (
+        {scoped.isLoading ? (
           <Loading />
-        ) : subList.length === 0 ? (
+        ) : scoped.error ? (
           <Empty
-            title="No votes yet"
-            body="As voters submit, charts populate live."
+            title="Analytics could not load"
+            body={
+              scoped.error instanceof Error
+                ? scoped.error.message
+                : "Unknown analytics error"
+            }
+          />
+        ) : activeSubmissions.length === 0 ? (
+          <Empty
+            title="No votes in this scope"
+            body="Choose a different edition, range, or round."
           />
         ) : (
           <>
@@ -459,7 +480,7 @@ function AnalyticsPage() {
               />
             </div>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-4">
               <Kpi label="Active" value={statusCounts.active} />
               <Kpi
                 label="Suspicious"
@@ -478,28 +499,28 @@ function AnalyticsPage() {
               />
             </div>
 
-            <div className="mt-3 grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-2">
               <Card
                 title="Voters by home country"
-                subtitle={`${subList.length} total`}
+                subtitle={`${activeSubmissions.length} eligible ballots`}
               >
                 <BarList
-                  rows={votersByHome.map((value) => ({
-                    label: `${value.flag} ${value.name}`,
-                    value: value.count,
+                  rows={votersByHome.map((row) => ({
+                    label: `${row.flag} ${row.name}`,
+                    value: row.count,
                   }))}
                 />
               </Card>
 
               <Card
                 title="Average points received"
-                subtitle="per target entry"
+                subtitle="across the selected scope"
               >
                 <BarList
-                  rows={avgPerTarget.slice(0, 12).map((value) => ({
-                    label: value.name,
-                    value: Number(value.avg.toFixed(2)),
-                    caption: `${value.sum} pts · ${value.count} ballots`,
+                  rows={avgPerTarget.slice(0, 15).map((row) => ({
+                    label: row.name,
+                    value: Number(row.avg.toFixed(2)),
+                    caption: `${row.sum} pts · ${row.count} scores`,
                   }))}
                   max={10}
                 />
@@ -514,21 +535,21 @@ function AnalyticsPage() {
 
               <Card
                 title="Submissions over time"
-                subtitle="per minute"
+                subtitle="chronological selected-scope activity"
               >
                 <Timeline data={timeline} />
               </Card>
 
               <Card
                 title="Bloc behaviour"
-                subtitle="Top 3 target entries chosen by each voter country"
+                subtitle="Top 3 targets by voter country across the selected scope"
                 className="lg:col-span-2"
               >
                 <div className="grid gap-2 sm:grid-cols-2">
                   {blocs.map((bloc) => (
                     <div
                       key={bloc.from}
-                      className="flex items-start gap-3 rounded-lg border border-border bg-card/50 p-3"
+                      className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-3"
                     >
                       <CountryFlag
                         country={bloc.fromCountry}
@@ -545,13 +566,15 @@ function AnalyticsPage() {
                             <Badge
                               key={target.entryKey}
                               variant="outline"
-                              className="inline-flex gap-1 text-[10px]"
+                              className="inline-flex max-w-full gap-1 text-[10px]"
                             >
                               <EntryAvatar
                                 entry={target.entry}
                                 size={14}
                               />
-                              {target.name}
+                              <span className="truncate">
+                                {target.name}
+                              </span>
                               <span className="font-semibold tabular-nums text-primary">
                                 {target.points}
                               </span>
@@ -566,7 +589,7 @@ function AnalyticsPage() {
 
               <Card
                 title="Risk distribution"
-                subtitle="voter risk scores"
+                subtitle="eligible ballots"
               >
                 <BarList
                   rows={[
@@ -592,23 +615,21 @@ function AnalyticsPage() {
 
               <Card
                 title="Most-supported targets"
-                subtitle="generic round entries"
+                subtitle="generic entry keys resolved across editions"
               >
                 <div className="space-y-2">
                   {avgPerTarget.slice(0, 10).map((target) => (
                     <div
                       key={target.entryKey}
-                      className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2"
+                      className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2"
                     >
                       <EntryAvatar
                         entry={target.entry}
                         size={24}
                       />
-
                       <span className="min-w-0 flex-1 truncate text-sm">
                         {target.name}
                       </span>
-
                       <span className="text-sm font-semibold tabular-nums">
                         {target.sum}
                       </span>
@@ -665,26 +686,22 @@ function Card({
 }: {
   title: string;
   subtitle?: string;
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
     <section className={cn("glass rounded-2xl p-4", className)}>
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <BarChart3 className="h-4 w-4 text-primary" />
-            {title}
-          </h3>
-
-          {subtitle ? (
-            <p className="text-xs text-muted-foreground">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
+      <header className="mb-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <BarChart3 className="h-4 w-4 text-primary" />
+          {title}
+        </h3>
+        {subtitle ? (
+          <p className="text-xs text-muted-foreground">
+            {subtitle}
+          </p>
+        ) : null}
       </header>
-
       {children}
     </section>
   );
@@ -751,8 +768,7 @@ function Histogram({ bins }: { bins: number[] }) {
           <div className="text-[9px] tabular-nums text-muted-foreground">
             {value}
           </div>
-
-          <div className="flex h-28 w-full items-end rounded-md bg-muted/40">
+          <div className="flex h-28 w-full items-end rounded-md bg-muted/50">
             <div
               className="w-full rounded-md bg-primary"
               style={{
@@ -760,7 +776,6 @@ function Histogram({ bins }: { bins: number[] }) {
               }}
             />
           </div>
-
           <div className="text-[10px] tabular-nums">
             {index + 1}
           </div>
@@ -778,16 +793,15 @@ function Timeline({
   const max = Math.max(1, ...data.map((item) => item.n));
 
   return (
-    <div className="space-y-2">
-      {data.slice(-20).map((item) => (
+    <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+      {data.slice(-40).map((item) => (
         <div
           key={item.t}
-          className="grid grid-cols-[70px_1fr_30px] items-center gap-2 text-xs"
+          className="grid grid-cols-[110px_1fr_34px] items-center gap-2 text-xs"
         >
-          <span className="text-muted-foreground">
+          <span className="truncate text-muted-foreground">
             {item.label}
           </span>
-
           <div className="h-2 rounded-full bg-muted">
             <div
               className="h-2 rounded-full bg-primary"
@@ -796,7 +810,6 @@ function Timeline({
               }}
             />
           </div>
-
           <span className="text-right tabular-nums">
             {item.n}
           </span>
@@ -824,13 +837,8 @@ function Empty({
 }) {
   return (
     <div className="glass rounded-2xl p-10 text-center">
-      {title ? (
-        <h3 className="font-semibold">{title}</h3>
-      ) : null}
-
-      <p className="text-sm text-muted-foreground">
-        {body}
-      </p>
+      {title ? <h3 className="font-semibold">{title}</h3> : null}
+      <p className="text-sm text-muted-foreground">{body}</p>
     </div>
   );
 }
