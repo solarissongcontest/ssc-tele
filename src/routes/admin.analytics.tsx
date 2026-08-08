@@ -1,8 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { BarChart3, Loader2, RefreshCcw, Download } from "lucide-react";
+import {
+  BarChart3,
+  Download,
+  Loader2,
+  RefreshCcw,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+
 import { AdminShell } from "@/components/admin-shell";
+import { CountryFlag, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
+import { EntryAvatar } from "@/components/entry-avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -11,209 +20,348 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { useRoundEntryCatalog } from "@/hooks/use-entry-key-catalog";
 import {
-  useAllRounds,
   useAllCountries,
+  useAllRounds,
   useRoundResults,
 } from "@/hooks/use-round-results";
+import { downloadCSV, downloadExcel } from "@/lib/export";
+import {
+  entryMap,
+  getEntryDisplayName,
+} from "@/lib/round-entries";
 import { cn } from "@/lib/utils";
-import { CountryFlag, UNKNOWN_COUNTRY_NAME } from "@/components/country-flag";
-import { downloadExcel, downloadCSV } from "@/lib/export";
 
-type CountryRow = { code: string; name: string; flag: string; flag_url: string | null };
+type CountryRow = {
+  code: string;
+  name: string;
+  flag: string;
+  flag_url: string | null;
+};
 
 export const Route = createFileRoute("/admin/analytics")({
-  head: () => ({ meta: [{ title: "Analytics — Solaris Admin" }] }),
+  head: () => ({
+    meta: [{ title: "Analytics — Solaris Admin" }],
+  }),
   component: AnalyticsPage,
 });
 
 function AnalyticsPage() {
   const qc = useQueryClient();
+
   const { data: rounds } = useAllRounds();
   const { data: countries } = useAllCountries();
+
   const [roundId, setRoundId] = useState<string | null>(null);
 
   const effective =
     roundId ??
-    rounds?.find((r) => r.status === "open")?.id ??
+    rounds?.find((round) => round.status === "open")?.id ??
     rounds?.[0]?.id ??
     null;
 
   const { subs, entries } = useRoundResults(effective);
+  const { data: roundEntries = [] } = useRoundEntryCatalog(effective);
 
-  const byCode = useMemo(() => {
-    const m = new Map<string, CountryRow>();
-    (countries ?? []).forEach((c) => m.set(c.code, c));
-    return m;
+  const byEntryKey = useMemo(
+    () => entryMap(roundEntries),
+    [roundEntries],
+  );
+
+  const byCountryCode = useMemo(() => {
+    const map = new Map<string, CountryRow>();
+
+    for (const country of countries ?? []) {
+      map.set(country.code, country);
+    }
+
+    return map;
   }, [countries]);
 
-  const round = rounds?.find((r) => r.id === effective);
+  const round = rounds?.find((item) => item.id === effective);
+
   const subList = subs.data ?? [];
   const entryList = entries.data ?? [];
-  const subMap = useMemo(() => new Map(subList.map((s) => [s.id, s])), [subList]);
 
-  /* Voters by home country */
+  const subMap = useMemo(
+    () => new Map(subList.map((submission) => [submission.id, submission])),
+    [subList],
+  );
+
+  /*
+   * VOTER identity remains a Solaris country.
+   */
   const votersByHome = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const s of subList) m.set(s.country_code, (m.get(s.country_code) ?? 0) + 1);
-    return Array.from(m.entries())
-      .map(([code, n]) => ({
-        code,
-        name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
-        flag: byCode.get(code)?.flag ?? "🏳️",
-        country: byCode.get(code) ?? null,
-        n,
-      }))
-      .sort((a, b) => b.n - a.n);
-  }, [subList, byCode]);
+    const totals = new Map<string, number>();
 
-  /* Average points per target country */
+    for (const submission of subList) {
+      totals.set(
+        submission.country_code,
+        (totals.get(submission.country_code) ?? 0) + 1,
+      );
+    }
+
+    return Array.from(totals.entries())
+      .map(([code, count]) => ({
+        code,
+        name: byCountryCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
+        flag: byCountryCode.get(code)?.flag ?? "🏳️",
+        country: byCountryCode.get(code) ?? null,
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [subList, byCountryCode]);
+
+  /*
+   * TARGET identity is a stable entry_key.
+   * `target_country_code` is only the legacy DB column name.
+   */
   const avgPerTarget = useMemo(() => {
-    const tot = new Map<string, { sum: number; count: number }>();
-    for (const e of entryList) {
-      const cur = tot.get(e.target_country_code) ?? { sum: 0, count: 0 };
-      cur.sum += e.points;
-      cur.count += 1;
-      tot.set(e.target_country_code, cur);
-    }
-    return Array.from(tot.entries())
-      .map(([code, v]) => ({
-        code,
-        name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
-        flag: byCode.get(code)?.flag ?? "🏳️",
-        country: byCode.get(code) ?? null,
-        avg: v.sum / v.count,
-        sum: v.sum,
-        count: v.count,
-      }))
-      .sort((a, b) => b.avg - a.avg);
-  }, [entryList, byCode]);
+    const totals = new Map<
+      string,
+      { sum: number; count: number }
+    >();
 
-  /* Bloc behaviour: top 3 destinations per voter country */
-  const blocs = useMemo(() => {
-    const m = new Map<string, Map<string, number>>();
-    for (const e of entryList) {
-      const sub = subMap.get(e.submission_id);
-      if (!sub) continue;
-      const inner = m.get(sub.country_code) ?? new Map<string, number>();
-      inner.set(e.target_country_code, (inner.get(e.target_country_code) ?? 0) + e.points);
-      m.set(sub.country_code, inner);
+    for (const voteEntry of entryList) {
+      const entryKey = voteEntry.target_country_code;
+
+      const current =
+        totals.get(entryKey) ?? {
+          sum: 0,
+          count: 0,
+        };
+
+      current.sum += voteEntry.points;
+      current.count += 1;
+
+      totals.set(entryKey, current);
     }
-    return Array.from(m.entries())
-      .map(([from, inner]) => {
-        const top = Array.from(inner.entries())
+
+    return Array.from(totals.entries())
+      .map(([entryKey, value]) => {
+        const entry = byEntryKey.get(entryKey);
+
+        return {
+          entryKey,
+          entry,
+          name: entry
+            ? getEntryDisplayName(entry)
+            : entryKey,
+          avg: value.sum / value.count,
+          sum: value.sum,
+          count: value.count,
+        };
+      })
+      .sort((a, b) => b.avg - a.avg);
+  }, [entryList, byEntryKey]);
+
+  /*
+   * Bloc behaviour is country voter -> generic target entry.
+   */
+  const blocs = useMemo(() => {
+    const totals = new Map<string, Map<string, number>>();
+
+    for (const voteEntry of entryList) {
+      const submission = subMap.get(voteEntry.submission_id);
+      if (!submission) continue;
+
+      const targetMap =
+        totals.get(submission.country_code) ?? new Map<string, number>();
+
+      const entryKey = voteEntry.target_country_code;
+
+      targetMap.set(
+        entryKey,
+        (targetMap.get(entryKey) ?? 0) + voteEntry.points,
+      );
+
+      totals.set(submission.country_code, targetMap);
+    }
+
+    return Array.from(totals.entries())
+      .map(([fromCountryCode, targetMap]) => {
+        const top = Array.from(targetMap.entries())
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3)
-          .map(([code, points]) => ({
-            code,
-            name: byCode.get(code)?.name ?? UNKNOWN_COUNTRY_NAME,
-            flag: byCode.get(code)?.flag ?? "🏳️",
-            country: byCode.get(code) ?? null,
-            points,
-          }));
+          .map(([entryKey, points]) => {
+            const entry = byEntryKey.get(entryKey);
+
+            return {
+              entryKey,
+              entry,
+              name: entry
+                ? getEntryDisplayName(entry)
+                : entryKey,
+              points,
+            };
+          });
+
         return {
-          from,
-          fromName: byCode.get(from)?.name ?? UNKNOWN_COUNTRY_NAME,
-          fromFlag: byCode.get(from)?.flag ?? "🏳️",
-          fromCountry: byCode.get(from) ?? null,
+          from: fromCountryCode,
+          fromName:
+            byCountryCode.get(fromCountryCode)?.name ??
+            UNKNOWN_COUNTRY_NAME,
+          fromCountry: byCountryCode.get(fromCountryCode) ?? null,
           top,
         };
       })
       .sort((a, b) => a.fromName.localeCompare(b.fromName));
-  }, [entryList, subMap, byCode]);
+  }, [entryList, subMap, byCountryCode, byEntryKey]);
 
-  /* Points distribution histogram (1-10) */
   const histogram = useMemo(() => {
     const bins = new Array(10).fill(0);
-    for (const e of entryList) {
-      if (e.points >= 1 && e.points <= 10) bins[e.points - 1] += 1;
+
+    for (const voteEntry of entryList) {
+      if (voteEntry.points >= 1 && voteEntry.points <= 10) {
+        bins[voteEntry.points - 1] += 1;
+      }
     }
+
     return bins;
   }, [entryList]);
 
-  /* Submissions over time (per minute, capped) */
   const timeline = useMemo(() => {
-    if (subList.length === 0) return [] as { t: number; label: string; n: number }[];
+    if (subList.length === 0) {
+      return [] as {
+        t: number;
+        label: string;
+        n: number;
+      }[];
+    }
+
     const buckets = new Map<number, number>();
-    for (const s of subList) {
-      const minute = Math.floor(new Date(s.created_at).getTime() / 60000) * 60000;
+
+    for (const submission of subList) {
+      const minute =
+        Math.floor(new Date(submission.created_at).getTime() / 60_000) *
+        60_000;
+
       buckets.set(minute, (buckets.get(minute) ?? 0) + 1);
     }
+
     return Array.from(buckets.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([t, n]) => ({
         t,
         n,
-        label: new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        label: new Date(t).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
       }));
   }, [subList]);
 
-  /* Status counts & unique voter stats */
   const statusCounts = useMemo(() => {
-    const c = { active: 0, suspicious: 0, verified: 0, deleted: 0 };
-    for (const s of subList) {
-      const k = (s.status ?? "active") as keyof typeof c;
-      if (k in c) c[k] += 1;
+    const counts = {
+      active: 0,
+      suspicious: 0,
+      verified: 0,
+      deleted: 0,
+    };
+
+    for (const submission of subList) {
+      const key =
+        (submission.status ?? "active") as keyof typeof counts;
+
+      if (key in counts) {
+        counts[key] += 1;
+      }
     }
-    return c;
+
+    return counts;
   }, [subList]);
 
   const uniqueStats = useMemo(() => {
     const users = new Set<string>();
-    const countries = new Set<string>();
+    const homeCountries = new Set<string>();
+
     let vpn = 0;
     let mismatch = 0;
-    for (const s of subList) {
-      users.add(s.username_normalized);
-      countries.add(s.country_code);
-      if (s.is_vpn) vpn += 1;
-      if (s.ip_country && s.ip_country.toUpperCase() !== s.country_code.toUpperCase())
+
+    for (const submission of subList) {
+      users.add(submission.username_normalized);
+      homeCountries.add(submission.country_code);
+
+      if (submission.is_vpn) vpn += 1;
+
+      if (
+        submission.ip_country &&
+        submission.ip_country.toUpperCase() !==
+          submission.country_code.toUpperCase()
+      ) {
         mismatch += 1;
+      }
     }
+
     return {
       uniqueVoters: users.size,
-      uniqueCountries: countries.size,
+      uniqueCountries: homeCountries.size,
       vpn,
       mismatch,
     };
   }, [subList]);
 
-  /* Risk distribution */
   const riskDistribution = useMemo(() => {
-    const bins = { low: 0, medium: 0, high: 0, critical: 0 };
-    for (const s of subList) {
-      const r = s.risk_score ?? 0;
-      if (r >= 70) bins.critical += 1;
-      else if (r >= 40) bins.high += 1;
-      else if (r >= 20) bins.medium += 1;
+    const bins = {
+      low: 0,
+      medium: 0,
+      high: 0,
+      critical: 0,
+    };
+
+    for (const submission of subList) {
+      const risk = submission.risk_score ?? 0;
+
+      if (risk >= 70) bins.critical += 1;
+      else if (risk >= 40) bins.high += 1;
+      else if (risk >= 20) bins.medium += 1;
       else bins.low += 1;
     }
+
     return bins;
   }, [subList]);
 
-  const exportRows = () => {
-    const rows = subList.map((s) => {
-      const es = entryList.filter((e) => e.submission_id === s.id);
-      const total = es.reduce((a, b) => a + b.points, 0);
+  const exportRows = () =>
+    subList.map((submission) => {
+      const ballotEntries = entryList.filter(
+        (entry) => entry.submission_id === submission.id,
+      );
+
       return {
-        username: s.username,
-        home_country: s.country_code,
-        ip_country: s.ip_country ?? "",
-        is_vpn: s.is_vpn ? "yes" : "no",
-        risk_score: s.risk_score ?? 0,
-        status: s.status ?? "active",
-        total_points: total,
-        entries: es.map((e) => `${e.target_country_code}:${e.points}`).join("|"),
-        submitted_at: s.created_at,
+        username: submission.username,
+        home_country: submission.country_code,
+        ip_country: submission.ip_country ?? "",
+        is_vpn: submission.is_vpn ? "yes" : "no",
+        risk_score: submission.risk_score ?? 0,
+        status: submission.status ?? "active",
+        total_points: ballotEntries.reduce(
+          (sum, entry) => sum + entry.points,
+          0,
+        ),
+        entries: ballotEntries
+          .map((entry) => {
+            const entryKey = entry.target_country_code;
+            const resolved = byEntryKey.get(entryKey);
+            const displayName = resolved
+              ? getEntryDisplayName(resolved)
+              : entryKey;
+
+            return `${displayName} [${entryKey}]:${entry.points}`;
+          })
+          .join("|"),
+        submitted_at: submission.created_at,
       };
     });
-    return rows;
-  };
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["results.subs", effective] });
-    qc.invalidateQueries({ queryKey: ["results.entries", effective] });
+    void qc.invalidateQueries({
+      queryKey: ["round-results", effective],
+    });
+
+    void qc.invalidateQueries({
+      queryKey: ["round-entry-catalog", effective],
+    });
   };
 
   return (
@@ -221,27 +369,38 @@ function AnalyticsPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-widest text-primary">Round</p>
-            <Select value={effective ?? undefined} onValueChange={(v) => setRoundId(v)}>
+            <p className="text-xs uppercase tracking-widest text-primary">
+              Round
+            </p>
+
+            <Select
+              value={effective ?? undefined}
+              onValueChange={setRoundId}
+            >
               <SelectTrigger className="w-[320px] max-w-full">
                 <SelectValue placeholder="Select round" />
               </SelectTrigger>
+
               <SelectContent>
-                {(rounds ?? []).map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.edition_name ? `${r.edition_name} · ` : ""}
-                    {r.name}
-                    {r.status === "open" ? " · Open" : ""}
+                {(rounds ?? []).map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.edition_name
+                      ? `${item.edition_name} · `
+                      : ""}
+                    {item.name}
+                    {item.status === "open" ? " · Open" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={refresh}>
               <RefreshCcw className="h-4 w-4" />
               Refresh
             </Button>
+
             <Button
               variant="outline"
               size="sm"
@@ -250,8 +409,10 @@ function AnalyticsPage() {
                 downloadCSV(`analytics-${effective}.csv`, exportRows())
               }
             >
-              <Download className="h-4 w-4" /> CSV
+              <Download className="h-4 w-4" />
+              CSV
             </Button>
+
             <Button
               variant="outline"
               size="sm"
@@ -260,7 +421,8 @@ function AnalyticsPage() {
                 downloadExcel(`analytics-${effective}.xls`, exportRows())
               }
             >
-              <Download className="h-4 w-4" /> Excel
+              <Download className="h-4 w-4" />
+              Excel
             </Button>
           </div>
         </div>
@@ -276,10 +438,15 @@ function AnalyticsPage() {
           />
         ) : (
           <>
-            {/* KPI strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Kpi label="Unique voters" value={uniqueStats.uniqueVoters} />
-              <Kpi label="Home countries" value={uniqueStats.uniqueCountries} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Kpi
+                label="Unique voters"
+                value={uniqueStats.uniqueVoters}
+              />
+              <Kpi
+                label="Home countries"
+                value={uniqueStats.uniqueCountries}
+              />
               <Kpi
                 label="VPN / proxy"
                 value={uniqueStats.vpn}
@@ -292,14 +459,18 @@ function AnalyticsPage() {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-4 mt-3">
+            <div className="mt-3 grid gap-3 sm:grid-cols-4">
               <Kpi label="Active" value={statusCounts.active} />
               <Kpi
                 label="Suspicious"
                 value={statusCounts.suspicious}
                 tone={statusCounts.suspicious > 0 ? "warn" : "ok"}
               />
-              <Kpi label="Verified" value={statusCounts.verified} tone="ok" />
+              <Kpi
+                label="Verified"
+                value={statusCounts.verified}
+                tone="ok"
+              />
               <Kpi
                 label="Deleted"
                 value={statusCounts.deleted}
@@ -307,80 +478,144 @@ function AnalyticsPage() {
               />
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2 mt-3">
-            <Card title="Voters by home country" subtitle={`${subList.length} total`}>
-              <BarList
-                rows={votersByHome.map((v) => ({
-                  label: `${v.flag} ${v.name}`,
-                  value: v.n,
-                }))}
-              />
-            </Card>
+            <div className="mt-3 grid gap-6 lg:grid-cols-2">
+              <Card
+                title="Voters by home country"
+                subtitle={`${subList.length} total`}
+              >
+                <BarList
+                  rows={votersByHome.map((value) => ({
+                    label: `${value.flag} ${value.name}`,
+                    value: value.count,
+                  }))}
+                />
+              </Card>
 
-            <Card title="Average points received" subtitle="per target country">
-              <BarList
-                rows={avgPerTarget.slice(0, 12).map((v) => ({
-                  label: `${v.flag} ${v.name}`,
-                  value: Number(v.avg.toFixed(2)),
-                  caption: `${v.sum} pts · ${v.count} ballots`,
-                }))}
-                max={10}
-              />
-            </Card>
+              <Card
+                title="Average points received"
+                subtitle="per target entry"
+              >
+                <BarList
+                  rows={avgPerTarget.slice(0, 12).map((value) => ({
+                    label: value.name,
+                    value: Number(value.avg.toFixed(2)),
+                    caption: `${value.sum} pts · ${value.count} ballots`,
+                  }))}
+                  max={10}
+                />
+              </Card>
 
-            <Card title="Points distribution" subtitle="how voters spend points">
-              <Histogram bins={histogram} />
-            </Card>
+              <Card
+                title="Points distribution"
+                subtitle="how voters spend points"
+              >
+                <Histogram bins={histogram} />
+              </Card>
 
-            <Card title="Submissions over time" subtitle="per minute">
-              <Timeline data={timeline} />
-            </Card>
+              <Card
+                title="Submissions over time"
+                subtitle="per minute"
+              >
+                <Timeline data={timeline} />
+              </Card>
 
-            <Card
-              title="Bloc behaviour"
-              subtitle="Top 3 destinations chosen by each voter country"
-              className="lg:col-span-2"
-            >
-              <div className="grid sm:grid-cols-2 gap-2">
-                {blocs.map((b) => (
-                  <div
-                    key={b.from}
-                    className="flex items-start gap-3 p-3 rounded-lg bg-card/50 border border-border"
-                  >
-                    <CountryFlag country={b.fromCountry} size={22} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{b.fromName}</div>
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {b.top.map((t) => (
-                          <Badge
-                            key={t.code}
-                            variant="outline"
-                            className="text-[10px] gap-1 inline-flex items-center"
-                          >
-                            <CountryFlag country={t.country} size={14} />
-                            {t.name}
-                            <span className="text-primary font-semibold tabular-nums">
-                              {t.points}
-                            </span>
-                          </Badge>
-                        ))}
+              <Card
+                title="Bloc behaviour"
+                subtitle="Top 3 target entries chosen by each voter country"
+                className="lg:col-span-2"
+              >
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {blocs.map((bloc) => (
+                    <div
+                      key={bloc.from}
+                      className="flex items-start gap-3 rounded-lg border border-border bg-card/50 p-3"
+                    >
+                      <CountryFlag
+                        country={bloc.fromCountry}
+                        size={22}
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">
+                          {bloc.fromName}
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {bloc.top.map((target) => (
+                            <Badge
+                              key={target.entryKey}
+                              variant="outline"
+                              className="inline-flex gap-1 text-[10px]"
+                            >
+                              <EntryAvatar
+                                entry={target.entry}
+                                size={14}
+                              />
+                              {target.name}
+                              <span className="font-semibold tabular-nums text-primary">
+                                {target.points}
+                              </span>
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
+                  ))}
+                </div>
+              </Card>
 
-            <Card title="Risk distribution" subtitle="voter risk scores">
-              <BarList
-                rows={[
-                  { label: "Low (0–19)", value: riskDistribution.low },
-                  { label: "Medium (20–39)", value: riskDistribution.medium },
-                  { label: "High (40–69)", value: riskDistribution.high },
-                  { label: "Critical (70+)", value: riskDistribution.critical },
-                ]}
-              />
-            </Card>
+              <Card
+                title="Risk distribution"
+                subtitle="voter risk scores"
+              >
+                <BarList
+                  rows={[
+                    {
+                      label: "Low (0–19)",
+                      value: riskDistribution.low,
+                    },
+                    {
+                      label: "Medium (20–39)",
+                      value: riskDistribution.medium,
+                    },
+                    {
+                      label: "High (40–69)",
+                      value: riskDistribution.high,
+                    },
+                    {
+                      label: "Critical (70+)",
+                      value: riskDistribution.critical,
+                    },
+                  ]}
+                />
+              </Card>
+
+              <Card
+                title="Most-supported targets"
+                subtitle="generic round entries"
+              >
+                <div className="space-y-2">
+                  {avgPerTarget.slice(0, 10).map((target) => (
+                    <div
+                      key={target.entryKey}
+                      className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2"
+                    >
+                      <EntryAvatar
+                        entry={target.entry}
+                        size={24}
+                      />
+
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {target.name}
+                      </span>
+
+                      <span className="text-sm font-semibold tabular-nums">
+                        {target.sum}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
             </div>
           </>
         )}
@@ -408,10 +643,12 @@ function Kpi({
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
+
       <div
         className={cn(
-          "text-2xl font-bold tabular-nums",
-          tone === "warn" ? "text-amber-500" : tone === "ok" ? "text-primary" : "",
+          "mt-1 text-2xl font-bold tabular-nums",
+          tone === "warn" && "text-amber-400",
+          tone === "ok" && "text-primary",
         )}
       >
         {value}
@@ -419,8 +656,6 @@ function Kpi({
     </div>
   );
 }
-
-/* ---------------- helpers ---------------- */
 
 function Card({
   title,
@@ -434,14 +669,22 @@ function Card({
   className?: string;
 }) {
   return (
-    <section className={cn("glass-strong rounded-2xl p-4 sm:p-5", className)}>
-      <header className="mb-3">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-primary" />
-          <h3 className="font-semibold">{title}</h3>
+    <section className={cn("glass rounded-2xl p-4", className)}>
+      <header className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <BarChart3 className="h-4 w-4 text-primary" />
+            {title}
+          </h3>
+
+          {subtitle ? (
+            <p className="text-xs text-muted-foreground">
+              {subtitle}
+            </p>
+          ) : null}
         </div>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
       </header>
+
       {children}
     </section>
   );
@@ -451,124 +694,143 @@ function BarList({
   rows,
   max,
 }: {
-  rows: { label: string; value: number; caption?: string }[];
+  rows: {
+    label: string;
+    value: number;
+    caption?: string;
+  }[];
   max?: number;
 }) {
-  if (rows.length === 0) return <p className="text-xs text-muted-foreground">No data.</p>;
-  const cap = max ?? Math.max(...rows.map((r) => r.value), 1);
+  const actualMax =
+    max ?? Math.max(1, ...rows.map((row) => row.value));
+
   return (
-    <ul className="space-y-2">
-      {rows.map((r, i) => (
-        <li key={i}>
-          <div className="flex justify-between text-xs gap-2">
-            <span className="truncate">{r.label}</span>
-            <span className="tabular-nums text-muted-foreground">
-              {r.caption ? `${r.caption} · ` : ""}
-              <span className="text-foreground font-semibold">{r.value}</span>
+    <div className="space-y-2">
+      {rows.map((row) => (
+        <div key={row.label} className="space-y-1">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="truncate">{row.label}</span>
+            <span className="shrink-0 tabular-nums">
+              {row.value}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-muted overflow-hidden mt-1">
+
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full bg-hero"
-              style={{ width: `${Math.min(100, (r.value / cap) * 100)}%` }}
+              className="h-full rounded-full bg-primary"
+              style={{
+                width: `${Math.max(
+                  1,
+                  Math.min(100, (row.value / actualMax) * 100),
+                )}%`,
+              }}
             />
           </div>
-        </li>
+
+          {row.caption ? (
+            <p className="text-[10px] text-muted-foreground">
+              {row.caption}
+            </p>
+          ) : null}
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }
 
 function Histogram({ bins }: { bins: number[] }) {
-  const max = Math.max(...bins, 1);
-  const W = 320;
-  const H = 140;
-  const bw = W / bins.length;
+  const max = Math.max(1, ...bins);
+
   return (
-    <svg viewBox={`0 0 ${W} ${H + 24}`} className="w-full">
-      {bins.map((v, i) => {
-        const h = (v / max) * H;
-        return (
-          <g key={i}>
-            <rect
-              x={i * bw + 3}
-              y={H - h}
-              width={bw - 6}
-              height={h}
-              rx={3}
-              className="fill-primary/80"
+    <div className="flex h-40 items-end gap-1">
+      {bins.map((value, index) => (
+        <div
+          key={index}
+          className="flex min-w-0 flex-1 flex-col items-center gap-1"
+        >
+          <div className="text-[9px] tabular-nums text-muted-foreground">
+            {value}
+          </div>
+
+          <div className="flex h-28 w-full items-end rounded-md bg-muted/40">
+            <div
+              className="w-full rounded-md bg-primary"
+              style={{
+                height: `${Math.max(2, (value / max) * 100)}%`,
+              }}
             />
-            <text
-              x={i * bw + bw / 2}
-              y={H + 14}
-              textAnchor="middle"
-              className="fill-muted-foreground text-[10px]"
-            >
-              {i + 1}
-            </text>
-            {v > 0 && (
-              <text
-                x={i * bw + bw / 2}
-                y={H - h - 4}
-                textAnchor="middle"
-                className="fill-foreground text-[10px] font-semibold"
-              >
-                {v}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+          </div>
+
+          <div className="text-[10px] tabular-nums">
+            {index + 1}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
-function Timeline({ data }: { data: { t: number; label: string; n: number }[] }) {
-  if (data.length === 0) return <p className="text-xs text-muted-foreground">No data yet.</p>;
-  const W = 480;
-  const H = 140;
-  const max = Math.max(...data.map((d) => d.n), 1);
-  const xs = (i: number) =>
-    data.length === 1 ? W / 2 : (i / (data.length - 1)) * (W - 20) + 10;
-  const ys = (n: number) => H - (n / max) * (H - 20) - 10;
-  const path = data.map((d, i) => `${i === 0 ? "M" : "L"}${xs(i)},${ys(d.n)}`).join(" ");
+function Timeline({
+  data,
+}: {
+  data: { t: number; label: string; n: number }[];
+}) {
+  const max = Math.max(1, ...data.map((item) => item.n));
+
   return (
-    <svg viewBox={`0 0 ${W} ${H + 24}`} className="w-full">
-      <path d={path} className="stroke-primary fill-none" strokeWidth={2} />
-      {data.map((d, i) => (
-        <g key={d.t}>
-          <circle cx={xs(i)} cy={ys(d.n)} r={3} className="fill-primary" />
-        </g>
+    <div className="space-y-2">
+      {data.slice(-20).map((item) => (
+        <div
+          key={item.t}
+          className="grid grid-cols-[70px_1fr_30px] items-center gap-2 text-xs"
+        >
+          <span className="text-muted-foreground">
+            {item.label}
+          </span>
+
+          <div className="h-2 rounded-full bg-muted">
+            <div
+              className="h-2 rounded-full bg-primary"
+              style={{
+                width: `${Math.max(2, (item.n / max) * 100)}%`,
+              }}
+            />
+          </div>
+
+          <span className="text-right tabular-nums">
+            {item.n}
+          </span>
+        </div>
       ))}
-      <text x={10} y={H + 18} className="fill-muted-foreground text-[10px]">
-        {data[0].label}
-      </text>
-      <text
-        x={W - 10}
-        y={H + 18}
-        textAnchor="end"
-        className="fill-muted-foreground text-[10px]"
-      >
-        {data[data.length - 1].label}
-      </text>
-    </svg>
+    </div>
   );
 }
 
 function Loading() {
   return (
     <div className="glass rounded-2xl p-10 text-center text-sm text-muted-foreground">
-      <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
       Loading analytics…
     </div>
   );
 }
 
-function Empty({ title, body }: { title?: string; body: string }) {
+function Empty({
+  title,
+  body,
+}: {
+  title?: string;
+  body: string;
+}) {
   return (
-    <div className="glass-strong rounded-2xl p-10 text-center">
-      {title && <h3 className="font-semibold">{title}</h3>}
-      <p className="text-sm text-muted-foreground">{body}</p>
+    <div className="glass rounded-2xl p-10 text-center">
+      {title ? (
+        <h3 className="font-semibold">{title}</h3>
+      ) : null}
+
+      <p className="text-sm text-muted-foreground">
+        {body}
+      </p>
     </div>
   );
 }
