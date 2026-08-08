@@ -8,15 +8,9 @@ import { EmptyState } from "@/components/empty-state";
 import { EntryAvatar } from "@/components/entry-avatar";
 import { TableSkeleton } from "@/components/panel-skeleton";
 import { PublicShell } from "@/components/public-shell";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { useRoundEntries } from "@/hooks/use-round-results";
 import {
   entryMap,
-  entryNoun,
   getEntryDisplayName,
 } from "@/lib/round-entries";
 import { getPublishedResults } from "@/lib/televote.functions";
@@ -30,21 +24,7 @@ export const Route = createFileRoute("/results")({
       {
         name: "description",
         content:
-          "Official Solaris Song Contest televote results: original vote totals and converted televote points for the latest published round.",
-      },
-      {
-        property: "og:title",
-        content: "Televote Results — Solaris Song Contest",
-      },
-      {
-        property: "og:description",
-        content:
-          "Original vote totals and converted televote points for the latest published Solaris round.",
-      },
-      { property: "og:type", content: "website" },
-      {
-        name: "twitter:card",
-        content: "summary_large_image",
+          "Official Solaris Song Contest televote results.",
       },
     ],
   }),
@@ -55,11 +35,11 @@ function PublicResultsPage() {
   const fetchResults = useServerFn(getPublishedResults);
 
   const [mode, setMode] = useState<
-    "original" | "converted" | "side"
-  >("side");
+    "converted" | "original" | "compare"
+  >("converted");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["public-published-results"],
+    queryKey: ["public-published-results-redesign"],
     queryFn: async () =>
       await fetchResults({ data: {} }),
     refetchInterval: 15_000,
@@ -76,38 +56,36 @@ function PublicResultsPage() {
     [roundEntries],
   );
 
-  const participantLabel = entryNoun(
-    roundEntries,
-    false,
+  const totalOriginal = rows.reduce(
+    (sum: number, row: any) =>
+      sum + Number(row.original_votes ?? 0),
+    0,
+  );
+
+  const totalConverted = rows.reduce(
+    (sum: number, row: any) =>
+      sum + Number(row.final_points ?? 0),
+    0,
   );
 
   return (
     <PublicShell>
-      <div className="space-y-6">
-        <header className="space-y-2 text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-primary">
-            Official result
+      <div className="space-y-5">
+        <header className="px-1 text-center">
+          <p className="text-[11px] uppercase tracking-[0.32em] text-primary">
+            Official televote result
           </p>
 
-          <h1 className="text-2xl font-semibold">
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
             {round
-              ? `${
-                  round.edition
-                    ? `${round.edition} — `
-                    : ""
-                }${round.name}`
+              ? `${round.edition ? `${round.edition} · ` : ""}${round.name}`
               : "Televote results"}
           </h1>
 
           {round ? (
-            <p className="text-xs text-muted-foreground">
-              {round.total_points} televote points distributed · v
-              {round.version} ·{" "}
-              {round.calculated_at
-                ? new Date(
-                    round.calculated_at,
-                  ).toLocaleString()
-                : ""}
+            <p className="mt-2 text-sm text-muted-foreground">
+              {round.total_points} converted televote points · v
+              {round.version}
             </p>
           ) : null}
         </header>
@@ -120,160 +98,294 @@ function PublicResultsPage() {
           <EmptyState
             icon={Trophy}
             title="No results published yet"
-            description="Published televote scoreboards appear here right after the show."
+            description="Published televote scoreboards appear here after the show."
           />
         ) : null}
 
         {round ? (
           <>
-            <Tabs
-              value={mode}
-              onValueChange={(value) =>
-                setMode(value as typeof mode)
-              }
-            >
-              <TabsList className="w-full">
-                <TabsTrigger
-                  className="flex-1"
-                  value="original"
-                >
-                  Original
-                </TabsTrigger>
+            <section className="grid grid-cols-3 gap-2">
+              <Stat
+                label="Entries"
+                value={String(rows.length)}
+              />
+              <Stat
+                label="Original"
+                value={String(totalOriginal)}
+              />
+              <Stat
+                label="Converted"
+                value={String(totalConverted)}
+              />
+            </section>
 
-                <TabsTrigger
-                  className="flex-1"
-                  value="converted"
-                >
-                  Converted
-                </TabsTrigger>
+            <div className="glass flex gap-1 rounded-2xl p-1.5">
+              <ModeButton
+                active={mode === "converted"}
+                onClick={() => setMode("converted")}
+              >
+                Converted
+              </ModeButton>
 
-                <TabsTrigger
-                  className="flex-1"
-                  value="side"
-                >
-                  Side-by-side
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+              <ModeButton
+                active={mode === "original"}
+                onClick={() => setMode("original")}
+              >
+                Original
+              </ModeButton>
 
-            <div className="glass overflow-x-auto rounded-3xl p-4">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="py-2 pr-3">#</th>
+              <ModeButton
+                active={mode === "compare"}
+                onClick={() => setMode("compare")}
+              >
+                Compare
+              </ModeButton>
+            </div>
 
-                    <th className="py-2 pr-3">
-                      {participantLabel}
-                    </th>
+            <section className="space-y-2">
+              {rows.map((row: any, index: number) => {
+                const entryKey =
+                  row.entry_key ?? row.country_code;
 
-                    {mode !== "converted" ? (
-                      <th className="py-2 pr-3 text-right">
-                        Original votes
-                      </th>
+                const entry =
+                  byEntryKey.get(entryKey);
+
+                const label = entry
+                  ? getEntryDisplayName(entry)
+                  : entryKey;
+
+                const originalRank =
+                  Number(row.original_rank ?? index + 1);
+
+                const convertedRank = index + 1;
+                const movement =
+                  originalRank - convertedRank;
+
+                return (
+                  <div
+                    key={entryKey}
+                    className={`glass-strong grid items-center gap-3 rounded-3xl px-3 py-3 sm:px-4 ${
+                      index === 0
+                        ? "ring-1 ring-primary/30"
+                        : ""
+                    } ${
+                      mode === "compare"
+                        ? "grid-cols-[34px_minmax(0,1fr)_84px_84px]"
+                        : "grid-cols-[34px_minmax(0,1fr)_96px]"
+                    }`}
+                  >
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold tabular-nums ${
+                        index === 0
+                          ? "bg-primary/20 text-primary"
+                          : "bg-white/[0.05] text-muted-foreground"
+                      }`}
+                    >
+                      {convertedRank}
+                    </div>
+
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <EntryAvatar
+                        entry={entry}
+                        size={26}
+                      />
+
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">
+                          {label}
+                        </p>
+
+                        {mode === "compare" ? (
+                          <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            original #{originalRank}
+                            {movement !== 0
+                              ? ` · ${
+                                  movement > 0 ? "▲" : "▼"
+                                }${Math.abs(movement)}`
+                              : " · unchanged"}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {mode === "converted" ? (
+                      <Score
+                        value={row.final_points}
+                        label="points"
+                        strong
+                      />
                     ) : null}
 
-                    {mode !== "original" ? (
-                      <th className="py-2 pr-3 text-right">
-                        Televote points
-                      </th>
+                    {mode === "original" ? (
+                      <Score
+                        value={row.original_votes}
+                        label="votes"
+                      />
                     ) : null}
 
-                    {round.advanced &&
-                    mode === "side" ? (
+                    {mode === "compare" ? (
                       <>
-                        <th className="py-2 pr-3 text-right">
-                          Rank factor
-                        </th>
-                        <th className="py-2 pr-3 text-right">
-                          Weighted
-                        </th>
-                        <th className="py-2 pr-3 text-right">
-                          Exact quota
-                        </th>
+                        <Score
+                          value={row.original_votes}
+                          label="original"
+                        />
+
+                        <Score
+                          value={row.final_points}
+                          label="converted"
+                          strong
+                        />
                       </>
                     ) : null}
-                  </tr>
-                </thead>
+                  </div>
+                );
+              })}
+            </section>
 
-                <tbody>
-                  {rows.map(
-                    (row: any, index: number) => {
-                      // country_code is the legacy DB/API name.
-                      // Its value is a generic entry_key.
-                      const entryKey =
-                        row.entry_key ??
-                        row.country_code;
+            {round.advanced ? (
+              <details className="glass rounded-3xl p-4">
+                <summary className="cursor-pointer text-sm font-medium">
+                  Advanced calculation details
+                </summary>
 
-                      const entry =
-                        byEntryKey.get(entryKey);
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-xs">
+                    <thead className="uppercase text-muted-foreground">
+                      <tr>
+                        <th className="p-2 text-left">
+                          Entry
+                        </th>
+                        <th className="p-2 text-right">
+                          Rank factor
+                        </th>
+                        <th className="p-2 text-right">
+                          Weighted
+                        </th>
+                        <th className="p-2 text-right">
+                          Exact quota
+                        </th>
+                      </tr>
+                    </thead>
 
-                      const label = entry
-                        ? getEntryDisplayName(entry)
-                        : entryKey;
+                    <tbody>
+                      {rows.map((row: any) => {
+                        const entryKey =
+                          row.entry_key ?? row.country_code;
 
-                      return (
-                        <tr
-                          key={entryKey}
-                          className="border-t border-white/5"
-                        >
-                          <td className="py-2 pr-3 tabular-nums">
-                            {index + 1}
-                          </td>
+                        const entry =
+                          byEntryKey.get(entryKey);
 
-                          <td className="py-2 pr-3">
-                            <span className="flex items-center gap-2">
-                              <EntryAvatar
-                                entry={entry}
-                                size={20}
-                              />
-                              <span>{label}</span>
-                            </span>
-                          </td>
-
-                          {mode !== "converted" ? (
-                            <td className="py-2 pr-3 text-right tabular-nums">
-                              {row.original_votes}
+                        return (
+                          <tr
+                            key={entryKey}
+                            className="border-t border-white/5"
+                          >
+                            <td className="p-2">
+                              {entry
+                                ? getEntryDisplayName(entry)
+                                : entryKey}
                             </td>
-                          ) : null}
 
-                          {mode !== "original" ? (
-                            <td className="py-2 pr-3 text-right text-base font-semibold tabular-nums">
-                              {row.final_points}
+                            <td className="p-2 text-right tabular-nums">
+                              {Number(
+                                row.rank_factor,
+                              ).toFixed(3)}
                             </td>
-                          ) : null}
 
-                          {round.advanced &&
-                          mode === "side" ? (
-                            <>
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {Number(
-                                  row.rank_factor,
-                                ).toFixed(3)}
-                              </td>
+                            <td className="p-2 text-right tabular-nums">
+                              {Number(
+                                row.weighted_score,
+                              ).toFixed(2)}
+                            </td>
 
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {Number(
-                                  row.weighted_score,
-                                ).toFixed(2)}
-                              </td>
-
-                              <td className="py-2 pr-3 text-right tabular-nums">
-                                {Number(
-                                  row.exact_points,
-                                ).toFixed(4)}
-                              </td>
-                            </>
-                          ) : null}
-                        </tr>
-                      );
-                    },
-                  )}
-                </tbody>
-              </table>
-            </div>
+                            <td className="p-2 text-right tabular-nums">
+                              {Number(
+                                row.exact_points,
+                              ).toFixed(4)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            ) : null}
           </>
         ) : null}
       </div>
     </PublicShell>
+  );
+}
+
+function Stat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="glass-strong rounded-2xl p-3 text-center">
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+
+      <p className="mt-1 text-lg font-semibold tabular-nums">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function Score({
+  value,
+  label,
+  strong = false,
+}: {
+  value: number;
+  label: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="text-right">
+      <p
+        className={`tabular-nums ${
+          strong
+            ? "text-xl font-semibold"
+            : "text-base font-medium"
+        }`}
+      >
+        {Number(value ?? 0)}
+      </p>
+
+      <p className="text-[9px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-10 flex-1 rounded-xl px-3 text-xs font-medium transition ${
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
