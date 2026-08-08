@@ -904,11 +904,53 @@ export const deleteCustomRoundEntry = createServerFn({ method: "POST" })
     if (beforeError) throw new Error(beforeError.message);
     if (!before) throw new Error("Custom entry not found");
 
+    /*
+     * Never delete an entry that already appears in a submitted ballot.
+     *
+     * vote_entries does not contain round_id directly, so first resolve the
+     * submission ids belonging to this round, then check whether any of those
+     * ballots target this entry's stable entry_key. The legacy database column
+     * is still named target_country_code, but its value is now an entry_key.
+     */
+    const { data: submissionRows, error: submissionError } =
+      await supabaseAdmin
+        .from("vote_submissions" as any)
+        .select("id")
+        .eq("round_id", data.roundId);
+
+    if (submissionError) throw new Error(submissionError.message);
+
+    const submissionIds = ((submissionRows ?? []) as any[]).map(
+      (row) => String(row.id),
+    );
+
+    if (submissionIds.length > 0) {
+      const { count: dependentVoteCount, error: voteDependencyError } =
+        await supabaseAdmin
+          .from("vote_entries" as any)
+          .select("id", { count: "exact", head: true })
+          .in("submission_id", submissionIds)
+          .eq("target_country_code", (before as any).entry_key);
+
+      if (voteDependencyError) {
+        throw new Error(voteDependencyError.message);
+      }
+
+      if ((dependentVoteCount ?? 0) > 0) {
+        throw new Error(
+          `Cannot delete this entry because it is referenced by ${dependentVoteCount} submitted vote${
+            dependentVoteCount === 1 ? "" : "s"
+          }. Keep the entry so historical ballots remain valid.`,
+        );
+      }
+    }
+
     const { error: deleteError } = await supabaseAdmin
       .from("round_entries" as any)
       .delete()
       .eq("id", data.entryId)
-      .eq("round_id", data.roundId);
+      .eq("round_id", data.roundId)
+      .eq("entry_type", "custom");
 
     if (deleteError) throw new Error(deleteError.message);
 
