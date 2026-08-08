@@ -374,42 +374,39 @@ export const getScopedAnalytics = createServerFn({
   });
 
 export type ScopedSimilarPair = {
-  a: {
-    id: string;
-    username: string;
-    country_code: string;
-    created_at: string;
+  countryA: string;
+  countryB: string;
+  matches: number;
+  maxScore: number;
+  averageScore: number;
+  sharedIpMatches: number;
+  sharedFingerprintMatches: number;
+  sharedDeviceMatches: number;
+  examples: {
     edition_name: string;
     round_name: string;
-  };
-  b: {
-    id: string;
-    username: string;
-    country_code: string;
-    created_at: string;
-    edition_name: string;
-    round_name: string;
-  };
-  score: number;
-  timeDeltaSec: number;
-  sharedIp: boolean;
-  sharedFingerprint: boolean;
+    a_username: string;
+    b_username: string;
+    score: number;
+    timeDeltaSec: number;
+  }[];
 };
 
 export type ScopedCluster = {
   id: number;
   members: {
-    id: string;
-    username: string;
     country_code: string;
-    created_at: string;
-    edition_name: string;
-    round_name: string;
-    ip_country: string | null;
-    is_vpn: boolean;
-    risk_score: number;
+    usernames: string[];
+    ballotCount: number;
+    editions: number;
+    rounds: number;
+    highestBallotRisk: number;
   }[];
   reasons: string[];
+  sharedIpEdges: number;
+  sharedFingerprintEdges: number;
+  sharedDeviceEdges: number;
+  nearIdenticalEdges: number;
   combinedRisk: number;
 };
 
@@ -438,6 +435,14 @@ function cosine(a: Map<string, number>, b: Map<string, number>) {
   return denominator === 0 ? 0 : dot / denominator;
 }
 
+function identityKey(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function pairKey(a: string, b: string) {
+  return [identityKey(a), identityKey(b)].sort().join("::");
+}
+
 export const getScopedDetection = createServerFn({
   method: "POST",
 })
@@ -459,6 +464,8 @@ export const getScopedDetection = createServerFn({
     similar: ScopedSimilarPair[];
     clusters: ScopedCluster[];
     blocs: ScopedBlocPair[];
+    identityCount: number;
+    ballotCount: number;
   }> => {
     await requireAdmin();
 
@@ -467,75 +474,212 @@ export const getScopedDetection = createServerFn({
       resolved.rounds.map((round) => [round.id, round]),
     );
 
-    const raw = (
+    const list = (
       await loadScopedSubmissions(
         resolved.rounds.map((round) => round.id),
       )
-    ).filter(isResultsEligible);
+    )
+      .filter(isResultsEligible)
+      .filter((submission) => Boolean(submission.country_code))
+      .slice(0, 10000);
 
-    const list = raw.slice(0, 10000);
+    /*
+     * IMPORTANT IDENTITY RULE
+     * -----------------------
+     * country_code is the permanent Head-of-Delegation identity.
+     *
+     * Multiple ballots from the same country across different rounds are
+     * repeated observations of ONE identity, not separate people. Therefore:
+     *
+     * - same-country ballots NEVER create similarity evidence against each other
+     * - same-country ballots NEVER create a technical "cluster"
+     * - technical clusters contain unique countries, not ballot rows
+     * - usernames remain display/supporting evidence only
+     */
 
-    const vectors = list.map((submission) => {
-      const map = new Map<string, number>();
+    const identities = new Map<string, RawSubmission[]>();
 
-      for (const entry of submission.vote_entries) {
-        map.set(entry.target_country_code, entry.points);
-      }
+    for (const submission of list) {
+      const key = identityKey(submission.country_code);
+      const current = identities.get(key) ?? [];
+      current.push(submission);
+      identities.set(key, current);
+    }
 
-      return map;
-    });
+    /*
+     * Near-identical ballot evidence is only compared inside the SAME ROUND.
+     * Comparing two raw ballots from different rounds with different entry sets
+     * creates fake similarity. We still analyse many editions at once by scanning
+     * every selected round and aggregating repeated cross-country pairs.
+     */
+    const submissionsByRound = new Map<string, RawSubmission[]>();
 
-    const similar: ScopedSimilarPair[] = [];
+    for (const submission of list) {
+      const current =
+        submissionsByRound.get(submission.round_id) ?? [];
+      current.push(submission);
+      submissionsByRound.set(submission.round_id, current);
+    }
 
-    for (let i = 0; i < list.length; i += 1) {
-      for (let j = i + 1; j < list.length; j += 1) {
-        const score = cosine(vectors[i], vectors[j]);
+    type SimilarAgg = {
+      countryA: string;
+      countryB: string;
+      scores: number[];
+      sharedIpMatches: number;
+      sharedFingerprintMatches: number;
+      sharedDeviceMatches: number;
+      examples: ScopedSimilarPair["examples"];
+    };
 
-        if (score < data.similarityThreshold) continue;
+    const similarAgg = new Map<string, SimilarAgg>();
 
-        const a = list[i];
-        const b = list[j];
-        const aRound = roundById.get(a.round_id);
-        const bRound = roundById.get(b.round_id);
+    for (const [roundId, roundSubs] of submissionsByRound) {
+      const vectors = roundSubs.map((submission) => {
+        const map = new Map<string, number>();
 
-        similar.push({
-          a: {
-            id: a.id,
-            username: a.username,
-            country_code: a.country_code,
-            created_at: a.created_at,
-            edition_name: aRound?.edition_name ?? "Unknown edition",
-            round_name: aRound?.name ?? "Unknown round",
-          },
-          b: {
-            id: b.id,
-            username: b.username,
-            country_code: b.country_code,
-            created_at: b.created_at,
-            edition_name: bRound?.edition_name ?? "Unknown edition",
-            round_name: bRound?.name ?? "Unknown round",
-          },
-          score: Number(score.toFixed(4)),
-          timeDeltaSec: Math.round(
-            Math.abs(
-              new Date(a.created_at).getTime() -
-                new Date(b.created_at).getTime(),
-            ) / 1000,
-          ),
-          sharedIp: Boolean(
-            a.ip_hash && a.ip_hash === b.ip_hash,
-          ),
-          sharedFingerprint: Boolean(
+        for (const entry of submission.vote_entries) {
+          map.set(entry.target_country_code, entry.points);
+        }
+
+        return map;
+      });
+
+      for (let i = 0; i < roundSubs.length; i += 1) {
+        for (let j = i + 1; j < roundSubs.length; j += 1) {
+          const a = roundSubs[i];
+          const b = roundSubs[j];
+
+          if (
+            identityKey(a.country_code) ===
+            identityKey(b.country_code)
+          ) {
+            continue;
+          }
+
+          const score = cosine(vectors[i], vectors[j]);
+
+          if (score < data.similarityThreshold) continue;
+
+          const key = pairKey(
+            a.country_code,
+            b.country_code,
+          );
+
+          const ordered =
+            identityKey(a.country_code) <=
+            identityKey(b.country_code)
+              ? [a, b]
+              : [b, a];
+
+          const round = roundById.get(roundId);
+
+          const current =
+            similarAgg.get(key) ?? {
+              countryA: ordered[0].country_code,
+              countryB: ordered[1].country_code,
+              scores: [],
+              sharedIpMatches: 0,
+              sharedFingerprintMatches: 0,
+              sharedDeviceMatches: 0,
+              examples: [],
+            };
+
+          current.scores.push(score);
+
+          if (
+            a.ip_hash &&
+            a.ip_hash === b.ip_hash
+          ) {
+            current.sharedIpMatches += 1;
+          }
+
+          if (
             a.fingerprint_hash &&
-              a.fingerprint_hash === b.fingerprint_hash,
-          ),
-        });
+            a.fingerprint_hash === b.fingerprint_hash
+          ) {
+            current.sharedFingerprintMatches += 1;
+          }
+
+          if (
+            a.device_token_hash &&
+            a.device_token_hash === b.device_token_hash
+          ) {
+            current.sharedDeviceMatches += 1;
+          }
+
+          if (current.examples.length < 5) {
+            current.examples.push({
+              edition_name:
+                round?.edition_name ?? "Unknown edition",
+              round_name:
+                round?.name ?? "Unknown round",
+              a_username: ordered[0].username,
+              b_username: ordered[1].username,
+              score: Number(score.toFixed(4)),
+              timeDeltaSec: Math.round(
+                Math.abs(
+                  new Date(a.created_at).getTime() -
+                    new Date(b.created_at).getTime(),
+                ) / 1000,
+              ),
+            });
+          }
+
+          similarAgg.set(key, current);
+        }
       }
     }
 
-    similar.sort((a, b) => b.score - a.score);
+    const similar: ScopedSimilarPair[] =
+      Array.from(similarAgg.values())
+        .map((item) => ({
+          countryA: item.countryA,
+          countryB: item.countryB,
+          matches: item.scores.length,
+          maxScore: Number(
+            Math.max(...item.scores).toFixed(4),
+          ),
+          averageScore: Number(
+            (
+              item.scores.reduce(
+                (sum, score) => sum + score,
+                0,
+              ) / item.scores.length
+            ).toFixed(4),
+          ),
+          sharedIpMatches: item.sharedIpMatches,
+          sharedFingerprintMatches:
+            item.sharedFingerprintMatches,
+          sharedDeviceMatches:
+            item.sharedDeviceMatches,
+          examples: item.examples,
+        }))
+        .sort(
+          (a, b) =>
+            b.matches - a.matches ||
+            b.maxScore - a.maxScore,
+        )
+        .slice(0, 200);
 
-    const parent = list.map((_, index) => index);
+    /*
+     * COUNTRY-IDENTITY TECHNICAL GRAPH
+     *
+     * Nodes = unique country identities.
+     * Edges = supporting evidence observed between DIFFERENT countries.
+     */
+    type EdgeEvidence = {
+      sharedIp: boolean;
+      sharedFingerprint: boolean;
+      sharedDevice: boolean;
+      nearIdentical: boolean;
+    };
+
+    const identityKeys = Array.from(identities.keys());
+    const identityIndex = new Map(
+      identityKeys.map((key, index) => [key, index]),
+    );
+
+    const parent = identityKeys.map((_, index) => index);
 
     const find = (index: number): number => {
       if (parent[index] === index) return index;
@@ -550,132 +694,281 @@ export const getScopedDetection = createServerFn({
       if (rootA !== rootB) parent[rootA] = rootB;
     };
 
-    const reasonsByIndex = new Map<number, Set<string>>();
+    const edgeMap = new Map<string, EdgeEvidence>();
 
-    const addReason = (index: number, reason: string) => {
-      const current = reasonsByIndex.get(index) ?? new Set<string>();
-      current.add(reason);
-      reasonsByIndex.set(index, current);
+    const addEdgeEvidence = (
+      aCountry: string,
+      bCountry: string,
+      patch: Partial<EdgeEvidence>,
+    ) => {
+      const aKey = identityKey(aCountry);
+      const bKey = identityKey(bCountry);
+
+      if (aKey === bKey) return;
+
+      const key = pairKey(aKey, bKey);
+
+      const current =
+        edgeMap.get(key) ?? {
+          sharedIp: false,
+          sharedFingerprint: false,
+          sharedDevice: false,
+          nearIdentical: false,
+        };
+
+      edgeMap.set(key, {
+        ...current,
+        ...patch,
+      });
     };
 
-    const identifierGroups = (
+    const addTechnicalEdges = (
       getter: (submission: RawSubmission) => string | null,
-      reason: string,
+      field:
+        | "sharedIp"
+        | "sharedFingerprint"
+        | "sharedDevice",
     ) => {
-      const groups = new Map<string, number[]>();
+      const byIdentifier = new Map<
+        string,
+        Set<string>
+      >();
 
-      list.forEach((submission, index) => {
-        const value = getter(submission);
-        if (!value) return;
+      for (const submission of list) {
+        const identifier = getter(submission);
+        if (!identifier) continue;
 
-        const indexes = groups.get(value) ?? [];
-        indexes.push(index);
-        groups.set(value, indexes);
-      });
+        const countries =
+          byIdentifier.get(identifier) ??
+          new Set<string>();
 
-      for (const indexes of groups.values()) {
-        if (indexes.length < 2) continue;
+        countries.add(
+          identityKey(submission.country_code),
+        );
 
-        for (let i = 1; i < indexes.length; i += 1) {
-          union(indexes[0], indexes[i]);
+        byIdentifier.set(identifier, countries);
+      }
+
+      for (const countries of byIdentifier.values()) {
+        const countryList = Array.from(countries);
+
+        if (countryList.length < 2) continue;
+
+        for (let i = 0; i < countryList.length; i += 1) {
+          for (
+            let j = i + 1;
+            j < countryList.length;
+            j += 1
+          ) {
+            addEdgeEvidence(
+              countryList[i],
+              countryList[j],
+              { [field]: true },
+            );
+          }
         }
-
-        indexes.forEach((index) => addReason(index, reason));
       }
     };
 
-    identifierGroups((submission) => submission.ip_hash, "shared IP");
-    identifierGroups(
+    addTechnicalEdges(
+      (submission) => submission.ip_hash,
+      "sharedIp",
+    );
+
+    addTechnicalEdges(
       (submission) => submission.fingerprint_hash,
-      "shared device fingerprint",
+      "sharedFingerprint",
     );
-    identifierGroups(
+
+    addTechnicalEdges(
       (submission) => submission.device_token_hash,
-      "shared device token",
+      "sharedDevice",
     );
 
-    for (let i = 0; i < list.length; i += 1) {
-      for (let j = i + 1; j < list.length; j += 1) {
-        if (cosine(vectors[i], vectors[j]) < data.similarityThreshold) {
-          continue;
-        }
+    for (const pair of similar) {
+      addEdgeEvidence(
+        pair.countryA,
+        pair.countryB,
+        { nearIdentical: true },
+      );
+    }
 
-        union(i, j);
-        addReason(i, "near-identical ballots");
-        addReason(j, "near-identical ballots");
+    for (const [key] of edgeMap) {
+      const [aKey, bKey] = key.split("::");
+
+      const aIndex = identityIndex.get(aKey);
+      const bIndex = identityIndex.get(bKey);
+
+      if (
+        aIndex !== undefined &&
+        bIndex !== undefined
+      ) {
+        union(aIndex, bIndex);
       }
     }
 
-    const grouped = new Map<number, number[]>();
+    const grouped = new Map<number, string[]>();
 
-    list.forEach((_, index) => {
+    identityKeys.forEach((countryKey, index) => {
       const root = find(index);
-      const indexes = grouped.get(root) ?? [];
-      indexes.push(index);
-      grouped.set(root, indexes);
+      const members = grouped.get(root) ?? [];
+      members.push(countryKey);
+      grouped.set(root, members);
     });
 
     const clusters: ScopedCluster[] = [];
     let clusterId = 1;
 
-    for (const indexes of grouped.values()) {
-      if (indexes.length < 2) continue;
+    for (const memberKeys of grouped.values()) {
+      if (memberKeys.length < 2) continue;
 
-      const members = indexes.map((index) => list[index]);
+      const memberSet = new Set(memberKeys);
+
+      let sharedIpEdges = 0;
+      let sharedFingerprintEdges = 0;
+      let sharedDeviceEdges = 0;
+      let nearIdenticalEdges = 0;
+
       const reasons = new Set<string>();
 
-      for (const index of indexes) {
-        for (const reason of reasonsByIndex.get(index) ?? []) {
-          reasons.add(reason);
+      for (const [key, evidence] of edgeMap) {
+        const [aKey, bKey] = key.split("::");
+
+        if (
+          !memberSet.has(aKey) ||
+          !memberSet.has(bKey)
+        ) {
+          continue;
+        }
+
+        if (evidence.sharedIp) {
+          sharedIpEdges += 1;
+          reasons.add("shared IP between countries");
+        }
+
+        if (evidence.sharedFingerprint) {
+          sharedFingerprintEdges += 1;
+          reasons.add(
+            "shared device fingerprint between countries",
+          );
+        }
+
+        if (evidence.sharedDevice) {
+          sharedDeviceEdges += 1;
+          reasons.add(
+            "shared device token between countries",
+          );
+        }
+
+        if (evidence.nearIdentical) {
+          nearIdenticalEdges += 1;
+          reasons.add(
+            "near-identical voting between countries",
+          );
         }
       }
 
-      const averageRisk =
+      const members = memberKeys.map((key) => {
+        const ballots = identities.get(key) ?? [];
+
+        const usernames = Array.from(
+          new Set(
+            ballots
+              .map((ballot) => ballot.username)
+              .filter(Boolean),
+          ),
+        ).slice(0, 4);
+
+        return {
+          country_code:
+            ballots[0]?.country_code ?? key,
+          usernames,
+          ballotCount: ballots.length,
+          editions: new Set(
+            ballots
+              .map((ballot) =>
+                roundById.get(ballot.round_id)?.edition_id,
+              )
+              .filter(Boolean),
+          ).size,
+          rounds: new Set(
+            ballots.map((ballot) => ballot.round_id),
+          ).size,
+          highestBallotRisk: Math.max(
+            0,
+            ...ballots.map(
+              (ballot) => ballot.risk_score ?? 0,
+            ),
+          ),
+        };
+      });
+
+      const averageBallotRisk =
         members.reduce(
-          (sum, member) => sum + member.risk_score,
+          (sum, member) =>
+            sum + member.highestBallotRisk,
           0,
         ) / members.length;
 
+      const technicalStrength =
+        sharedIpEdges * 18 +
+        sharedFingerprintEdges * 20 +
+        sharedDeviceEdges * 22 +
+        nearIdenticalEdges * 12;
+
+      const combinedRisk = Math.min(
+        100,
+        Math.round(
+          averageBallotRisk * 0.35 +
+            technicalStrength +
+            Math.max(0, members.length - 2) * 6,
+        ),
+      );
+
       clusters.push({
         id: clusterId,
-        members: members.map((member) => {
-          const round = roundById.get(member.round_id);
-
-          return {
-            id: member.id,
-            username: member.username,
-            country_code: member.country_code,
-            created_at: member.created_at,
-            edition_name: round?.edition_name ?? "Unknown edition",
-            round_name: round?.name ?? "Unknown round",
-            ip_country: member.ip_country,
-            is_vpn: member.is_vpn,
-            risk_score: member.risk_score,
-          };
-        }),
+        members,
         reasons: Array.from(reasons),
-        combinedRisk: Math.min(
-          100,
-          Math.round(
-            averageRisk + Math.max(0, members.length - 1) * 10,
-          ),
-        ),
+        sharedIpEdges,
+        sharedFingerprintEdges,
+        sharedDeviceEdges,
+        nearIdenticalEdges,
+        combinedRisk,
       });
 
       clusterId += 1;
     }
 
-    clusters.sort((a, b) => b.combinedRisk - a.combinedRisk);
+    clusters.sort(
+      (a, b) =>
+        b.combinedRisk - a.combinedRisk ||
+        b.members.length - a.members.length,
+    );
 
+    /*
+     * Voting-bloc outliers remain voter-country -> target-entry.
+     * Multiple ballots from one country are intentionally aggregated because
+     * the country is the identity.
+     */
     const aggregates = new Map<
       string,
-      Map<string, { sum: number; count: number }>
+      Map<
+        string,
+        { sum: number; count: number }
+      >
     >();
 
     for (const submission of list) {
+      const voter = identityKey(
+        submission.country_code,
+      );
+
       const targets =
-        aggregates.get(submission.country_code) ??
-        new Map<string, { sum: number; count: number }>();
+        aggregates.get(voter) ??
+        new Map<
+          string,
+          { sum: number; count: number }
+        >();
 
       for (const entry of submission.vote_entries) {
         const current =
@@ -684,26 +977,35 @@ export const getScopedDetection = createServerFn({
 
         current.sum += entry.points;
         current.count += 1;
-        targets.set(entry.target_country_code, current);
+
+        targets.set(
+          entry.target_country_code,
+          current,
+        );
       }
 
-      aggregates.set(submission.country_code, targets);
+      aggregates.set(voter, targets);
     }
 
     const blocs: ScopedBlocPair[] = [];
 
     for (const [from, targets] of aggregates) {
-      const means = Array.from(targets.values()).map(
+      const means = Array.from(
+        targets.values(),
+      ).map(
         (value) => value.sum / value.count,
       );
 
       const meanAll =
-        means.reduce((sum, value) => sum + value, 0) /
-        Math.max(1, means.length);
+        means.reduce(
+          (sum, value) => sum + value,
+          0,
+        ) / Math.max(1, means.length);
 
       const variance =
         means.reduce(
-          (sum, value) => sum + (value - meanAll) ** 2,
+          (sum, value) =>
+            sum + (value - meanAll) ** 2,
           0,
         ) / Math.max(1, means.length);
 
@@ -713,7 +1015,10 @@ export const getScopedDetection = createServerFn({
         const mean = value.sum / value.count;
         const z = (mean - meanAll) / sd;
 
-        if (value.count >= 2 && z >= 1.5) {
+        if (
+          value.count >= 2 &&
+          z >= 1.5
+        ) {
           blocs.push({
             from,
             to,
@@ -725,14 +1030,20 @@ export const getScopedDetection = createServerFn({
       }
     }
 
-    blocs.sort((a, b) => b.z - a.z);
+    blocs.sort(
+      (a, b) =>
+        b.z - a.z ||
+        b.count - a.count,
+    );
 
     return {
       editions: resolved.editions,
       rounds: resolved.rounds,
-      similar: similar.slice(0, 200),
-      clusters: clusters.slice(0, 200),
+      similar,
+      clusters: clusters.slice(0, 100),
       blocs: blocs.slice(0, 200),
+      identityCount: identities.size,
+      ballotCount: list.length,
     };
   });
 
