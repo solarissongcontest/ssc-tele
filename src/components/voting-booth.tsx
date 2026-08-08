@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -16,7 +16,6 @@ import {
   Vote,
 } from "lucide-react";
 import { toast } from "sonner";
-import { toJpeg, toPng } from "html-to-image";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,6 +70,62 @@ const TOTAL = 20;
 const MAX_PER = 10;
 const MIN_ENTRIES = 5;
 
+const receiptKey = (roundId: string) => `ssc_vote_receipt:${roundId}`;
+
+function readStoredConfirmation(roundId: string): Confirmation | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(receiptKey(roundId));
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<Confirmation>;
+
+    if (
+      typeof parsed.username !== "string" ||
+      typeof parsed.home !== "string" ||
+      !Array.isArray(parsed.breakdown)
+    ) {
+      return null;
+    }
+
+    const breakdown = parsed.breakdown
+      .map((item: any) => ({
+        entryKey: String(item?.entryKey ?? ""),
+        points: Number(item?.points ?? 0),
+      }))
+      .filter(
+        (item) =>
+          item.entryKey &&
+          Number.isFinite(item.points) &&
+          item.points > 0,
+      );
+
+    if (breakdown.length === 0) return null;
+
+    return {
+      username: parsed.username.trim(),
+      home: parsed.home.trim(),
+      breakdown,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storeConfirmation(roundId: string, confirmation: Confirmation) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      receiptKey(roundId),
+      JSON.stringify(confirmation),
+    );
+  } catch {
+    // Voting must still succeed if localStorage is unavailable.
+  }
+}
+
 export function VotingBooth({
   roundId,
   roundName,
@@ -84,7 +139,9 @@ export function VotingBooth({
   entries: ResolvedEntry[];
   selfVotingMode?: SelfVotingMode | string;
 }) {
-  const alreadyVoted = hasSubmittedRound(roundId);
+  const storedConfirmation = readStoredConfirmation(roundId);
+  const alreadyVoted =
+    hasSubmittedRound(roundId) || Boolean(storedConfirmation);
 
   const [stage, setStage] = useState<Stage>(
     alreadyVoted ? "done" : "register",
@@ -94,19 +151,10 @@ export function VotingBooth({
   const [home, setHome] = useState("");
   const [points, setPoints] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(
+    storedConfirmation,
+  );
 
-  /*
-   * The voter identity is still a Solaris country.
-   *
-   * This is separate from the round participants. A round may contain:
-   * - countries
-   * - custom entries
-   * - both
-   *
-   * The country dropdown therefore continues to load the complete country
-   * library instead of only the entries competing in this round.
-   */
   const {
     data: allCountries,
     isLoading: countriesLoading,
@@ -126,10 +174,7 @@ export function VotingBooth({
     staleTime: 60_000,
   });
 
-  const sortedEntries = useMemo(
-    () => sortEntries(entries),
-    [entries],
-  );
+  const sortedEntries = useMemo(() => sortEntries(entries), [entries]);
 
   const byEntryKey = useMemo(
     () => entryMap(sortedEntries),
@@ -175,11 +220,6 @@ export function VotingBooth({
     (value) => value > 0,
   ).length;
 
-  /*
-   * The database currently treats the matching country entry as the voter's
-   * own entry for every restricted mode. Custom-entry identity linking can be
-   * added later without changing the ballot key model.
-   */
   const isSelfEntry = (entry: ResolvedEntry) => {
     if (selfVotingMode === "unrestricted") return false;
 
@@ -196,18 +236,6 @@ export function VotingBooth({
     mutationFn: async () => {
       const ident = await buildClientIdentity();
 
-      /*
-       * IMPORTANT:
-       *
-       * target_country_code is still the legacy RPC JSON property name.
-       * Its VALUE is now the stable round entry key.
-       *
-       * For a country entry:
-       *   entry_key === country code
-       *
-       * For a custom entry:
-       *   entry_key === stable generated/custom entry key
-       */
       const ballotEntries = Object.entries(points)
         .filter(([, value]) => value > 0)
         .map(([entryKey, value]) => ({
@@ -233,9 +261,7 @@ export function VotingBooth({
     },
 
     onSuccess: ({ ballotEntries }) => {
-      markRoundSubmitted(roundId);
-
-      setConfirmation({
+      const receipt: Confirmation = {
         username: username.trim(),
         home,
         breakdown: ballotEntries
@@ -248,8 +274,11 @@ export function VotingBooth({
               b.points - a.points ||
               a.entryKey.localeCompare(b.entryKey),
           ),
-      });
+      };
 
+      markRoundSubmitted(roundId);
+      storeConfirmation(roundId, receipt);
+      setConfirmation(receipt);
       setStage("done");
 
       toast.success("Your vote has been recorded");
@@ -269,12 +298,6 @@ export function VotingBooth({
     },
   });
 
-  /*
-   * ------------------------------------------------------------
-   * DONE
-   * ------------------------------------------------------------
-   */
-
   if (stage === "done") {
     return (
       <DoneCard
@@ -286,12 +309,6 @@ export function VotingBooth({
       />
     );
   }
-
-  /*
-   * ------------------------------------------------------------
-   * REGISTER
-   * ------------------------------------------------------------
-   */
 
   if (stage === "register") {
     const canContinue =
@@ -400,18 +417,11 @@ export function VotingBooth({
           className="bg-hero shadow-glow h-11 w-full text-primary-foreground"
         >
           <Vote className="h-4 w-4" />
-
           Enter the booth
         </Button>
       </section>
     );
   }
-
-  /*
-   * ------------------------------------------------------------
-   * VOTE
-   * ------------------------------------------------------------
-   */
 
   const adjust = (
     entryKey: string,
@@ -419,7 +429,6 @@ export function VotingBooth({
   ) => {
     setPoints((previous) => {
       const current = previous[entryKey] ?? 0;
-
       let next = current + delta;
 
       if (next < 0) next = 0;
@@ -430,10 +439,14 @@ export function VotingBooth({
         0,
       );
 
-      const otherTotal = currentTotal - current;
+      const otherTotal =
+        currentTotal - current;
 
       if (otherTotal + next > TOTAL) {
-        next = Math.max(0, TOTAL - otherTotal);
+        next = Math.max(
+          0,
+          TOTAL - otherTotal,
+        );
       }
 
       const output = {
@@ -456,9 +469,10 @@ export function VotingBooth({
   const homeCountry =
     byCountryCode.get(home);
 
-  const visibleEntries = sortedEntries.filter(
-    (entry) => {
-      const query = search.trim().toLowerCase();
+  const visibleEntries =
+    sortedEntries.filter((entry) => {
+      const query =
+        search.trim().toLowerCase();
 
       if (!query) return true;
 
@@ -473,8 +487,7 @@ export function VotingBooth({
           .toLowerCase()
           .includes(query)
       );
-    },
-  );
+    });
 
   return (
     <section className="space-y-5">
@@ -482,7 +495,9 @@ export function VotingBooth({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-[11px] uppercase tracking-widest text-primary">
-              {editionName ? `${editionName} · ` : ""}
+              {editionName
+                ? `${editionName} · `
+                : ""}
               {roundName}
             </p>
 
@@ -525,7 +540,8 @@ export function VotingBooth({
                   "border-primary/50 text-primary",
               )}
             >
-              {entriesUsed}/{MIN_ENTRIES}+ {participantNoun}
+              {entriesUsed}/{MIN_ENTRIES}+{" "}
+              {participantNoun}
             </Badge>
           </div>
         </div>
@@ -535,7 +551,10 @@ export function VotingBooth({
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={TOTAL}
-          aria-valuenow={Math.min(used, TOTAL)}
+          aria-valuenow={Math.min(
+            used,
+            TOTAL,
+          )}
           aria-label="Points distributed"
         >
           <div
@@ -552,7 +571,6 @@ export function VotingBooth({
         {used > TOTAL ? (
           <div className="mt-2 flex items-center gap-2 text-xs text-destructive">
             <AlertTriangle className="h-3.5 w-3.5" />
-
             Too many points distributed.
           </div>
         ) : null}
@@ -580,7 +598,6 @@ export function VotingBooth({
           onClick={() => setPoints({})}
         >
           <RotateCcw className="h-4 w-4" />
-
           <span className="hidden sm:inline">
             Reset
           </span>
@@ -589,22 +606,29 @@ export function VotingBooth({
 
       {visibleEntries.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          No {participantNoun} match “{search}”.
+          No {participantNoun} match “
+          {search}”.
         </p>
       ) : null}
 
       <ul className="grid grid-cols-1 gap-2.5">
         {visibleEntries.map((entry) => {
-          const entryKey = entry.entry_key;
-          const blockedSelfVote = isSelfEntry(entry);
-          const value = points[entryKey] ?? 0;
+          const entryKey =
+            entry.entry_key;
+
+          const blockedSelfVote =
+            isSelfEntry(entry);
+
+          const value =
+            points[entryKey] ?? 0;
 
           return (
             <li
               key={entry.id}
               className={cn(
                 "glass flex min-w-0 items-center gap-3 rounded-xl px-3 py-3",
-                blockedSelfVote && "opacity-50",
+                blockedSelfVote &&
+                  "opacity-50",
                 value > 0 &&
                   "ring-1 ring-primary/40",
               )}
@@ -621,11 +645,9 @@ export function VotingBooth({
 
                 <div className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
                   #{entry.display_order}
-
                   {entry.subtitle
                     ? ` · ${entry.subtitle}`
                     : ""}
-
                   {blockedSelfVote
                     ? " · your entry"
                     : ""}
@@ -742,14 +764,19 @@ function DoneCard({
   roundName: string;
   editionName?: string | null;
   confirmation: Confirmation | null;
-  byCountryCode: Map<string, CountryShape>;
-  byEntryKey: Map<string, ResolvedEntry>;
+  byCountryCode: Map<
+    string,
+    CountryShape
+  >;
+  byEntryKey: Map<
+    string,
+    ResolvedEntry
+  >;
 }) {
-  const exportRef = useRef<HTMLDivElement | null>(null);
-
-  const [exporting, setExporting] = useState<
-    "png" | "jpg" | null
-  >(null);
+  const [exporting, setExporting] =
+    useState<
+      "png" | "jpg" | null
+    >(null);
 
   const homeCountry = confirmation
     ? byCountryCode.get(
@@ -758,17 +785,30 @@ function DoneCard({
     : null;
 
   const sortedBreakdown = confirmation
-    ? [...confirmation.breakdown].sort(
-        (a, b) =>
-          b.points - a.points ||
+    ? [
+        ...confirmation.breakdown,
+      ].sort((a, b) => {
+        const aName =
           getEntryDisplayName(
-            byEntryKey.get(a.entryKey),
-          ).localeCompare(
-            getEntryDisplayName(
-              byEntryKey.get(b.entryKey),
+            byEntryKey.get(
+              a.entryKey,
             ),
-          ),
-      )
+          );
+
+        const bName =
+          getEntryDisplayName(
+            byEntryKey.get(
+              b.entryKey,
+            ),
+          );
+
+        return (
+          b.points - a.points ||
+          aName.localeCompare(
+            bName,
+          )
+        );
+      })
     : [];
 
   const totalPoints =
@@ -781,18 +821,21 @@ function DoneCard({
   const share = async () => {
     if (!confirmation) return;
 
-    const lines = sortedBreakdown
-      .map((item) => {
-        const entry =
-          byEntryKey.get(
-            item.entryKey,
-          );
+    const lines =
+      sortedBreakdown
+        .map((item) => {
+          const entry =
+            byEntryKey.get(
+              item.entryKey,
+            );
 
-        return `${item.points} — ${getEntryDisplayName(
-          entry,
-        )}`;
-      })
-      .join("\n");
+          return `${
+            item.points
+          } — ${getEntryDisplayName(
+            entry,
+          )}`;
+        })
+        .join("\n");
 
     const text =
       `My ${
@@ -810,7 +853,8 @@ function DoneCard({
         navigator.share
       ) {
         await navigator.share({
-          title: "My Solaris televote",
+          title:
+            "My Solaris televote",
           text,
         });
 
@@ -825,17 +869,12 @@ function DoneCard({
         "Vote summary copied to clipboard",
       );
     } catch {
-      /*
-       * The user may simply have dismissed the share sheet.
-       * No error toast is needed for that.
-       */
+      // Closing the share sheet is not an error.
     }
   };
 
-  const buildFileName = (
-    extension: "png" | "jpg",
-  ) => {
-    const base = [
+  const fileBaseName = () =>
+    [
       editionName,
       roundName,
       "vote-overview",
@@ -843,88 +882,683 @@ function DoneCard({
       .filter(Boolean)
       .join("-")
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+      .replace(
+        /[^a-z0-9]+/g,
+        "-",
+      )
+      .replace(
+        /^-+|-+$/g,
+        "",
+      ) ||
+    "solaris-vote-overview";
 
-    return `${base || "solaris-vote-overview"}.${extension}`;
-  };
-
-  const triggerDownload = (
-    dataUrl: string,
-    fileName: string,
+  const roundRect = (
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
   ) => {
-    const link =
-      document.createElement("a");
+    const r = Math.min(
+      radius,
+      width / 2,
+      height / 2,
+    );
 
-    link.href = dataUrl;
-    link.download = fileName;
-    link.rel = "noopener";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    context.beginPath();
+    context.moveTo(x + r, y);
+    context.lineTo(
+      x + width - r,
+      y,
+    );
+
+    context.quadraticCurveTo(
+      x + width,
+      y,
+      x + width,
+      y + r,
+    );
+
+    context.lineTo(
+      x + width,
+      y + height - r,
+    );
+
+    context.quadraticCurveTo(
+      x + width,
+      y + height,
+      x + width - r,
+      y + height,
+    );
+
+    context.lineTo(
+      x + r,
+      y + height,
+    );
+
+    context.quadraticCurveTo(
+      x,
+      y + height,
+      x,
+      y + height - r,
+    );
+
+    context.lineTo(
+      x,
+      y + r,
+    );
+
+    context.quadraticCurveTo(
+      x,
+      y,
+      x + r,
+      y,
+    );
+
+    context.closePath();
   };
 
-  const exportImage = async (
-    format: "png" | "jpg",
+  const fitText = (
+    context: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number,
+  ) => {
+    if (
+      context.measureText(text)
+        .width <= maxWidth
+    ) {
+      return text;
+    }
+
+    let output = text;
+
+    while (
+      output.length > 1 &&
+      context.measureText(
+        `${output}…`,
+      ).width > maxWidth
+    ) {
+      output =
+        output.slice(0, -1);
+    }
+
+    return `${output}…`;
+  };
+
+  const createVoteCanvas =
+    () => {
+      if (!confirmation) {
+        return null;
+      }
+
+      const canvas =
+        document.createElement(
+          "canvas",
+        );
+
+      const width = 1080;
+      const height = 1350;
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx =
+        canvas.getContext("2d");
+
+      if (!ctx) return null;
+
+      const background =
+        ctx.createLinearGradient(
+          0,
+          0,
+          width,
+          height,
+        );
+
+      background.addColorStop(
+        0,
+        "#111944",
+      );
+
+      background.addColorStop(
+        0.5,
+        "#0b2756",
+      );
+
+      background.addColorStop(
+        1,
+        "#07546a",
+      );
+
+      ctx.fillStyle =
+        background;
+
+      ctx.fillRect(
+        0,
+        0,
+        width,
+        height,
+      );
+
+      const glow =
+        ctx.createRadialGradient(
+          160,
+          110,
+          20,
+          160,
+          110,
+          520,
+        );
+
+      glow.addColorStop(
+        0,
+        "rgba(118,240,225,0.28)",
+      );
+
+      glow.addColorStop(
+        1,
+        "rgba(118,240,225,0)",
+      );
+
+      ctx.fillStyle = glow;
+
+      ctx.fillRect(
+        0,
+        0,
+        width,
+        650,
+      );
+
+      ctx.textAlign =
+        "center";
+
+      ctx.fillStyle =
+        "#76f0e1";
+
+      ctx.font =
+        "600 24px Arial, sans-serif";
+
+      ctx.fillText(
+        "SOLARIS SONG CONTEST",
+        width / 2,
+        82,
+      );
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      ctx.font =
+        "700 62px Arial, sans-serif";
+
+      ctx.fillText(
+        "MY TELEVOTE",
+        width / 2,
+        155,
+      );
+
+      ctx.fillStyle =
+        "rgba(255,255,255,0.72)";
+
+      ctx.font =
+        "400 28px Arial, sans-serif";
+
+      ctx.fillText(
+        `${
+          editionName
+            ? `${editionName} · `
+            : ""
+        }${roundName}`,
+        width / 2,
+        205,
+      );
+
+      roundRect(
+        ctx,
+        70,
+        245,
+        940,
+        116,
+        30,
+      );
+
+      ctx.fillStyle =
+        "rgba(255,255,255,0.08)";
+
+      ctx.fill();
+
+      ctx.textAlign =
+        "left";
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      ctx.font =
+        "700 31px Arial, sans-serif";
+
+      ctx.fillText(
+        fitText(
+          ctx,
+          confirmation.username,
+          590,
+        ),
+        105,
+        292,
+      );
+
+      ctx.fillStyle =
+        "rgba(255,255,255,0.66)";
+
+      ctx.font =
+        "400 23px Arial, sans-serif";
+
+      ctx.fillText(
+        countryName(
+          homeCountry,
+        ),
+        105,
+        328,
+      );
+
+      ctx.textAlign =
+        "right";
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      ctx.font =
+        "700 42px Arial, sans-serif";
+
+      ctx.fillText(
+        String(
+          totalPoints,
+        ),
+        955,
+        300,
+      );
+
+      ctx.fillStyle =
+        "rgba(255,255,255,0.55)";
+
+      ctx.font =
+        "500 17px Arial, sans-serif";
+
+      ctx.fillText(
+        "TOTAL POINTS",
+        955,
+        330,
+      );
+
+      const listTop = 395;
+      const listBottom =
+        1195;
+
+      const availableHeight =
+        listBottom - listTop;
+
+      const rowGap = 10;
+
+      const rowHeight =
+        Math.max(
+          38,
+          Math.min(
+            82,
+            Math.floor(
+              (availableHeight -
+                rowGap *
+                  Math.max(
+                    0,
+                    sortedBreakdown.length -
+                      1,
+                  )) /
+                Math.max(
+                  1,
+                  sortedBreakdown.length,
+                ),
+            ),
+          ),
+        );
+
+      sortedBreakdown.forEach(
+        (item, index) => {
+          const entry =
+            byEntryKey.get(
+              item.entryKey,
+            );
+
+          const y =
+            listTop +
+            index *
+              (rowHeight +
+                rowGap);
+
+          roundRect(
+            ctx,
+            70,
+            y,
+            940,
+            rowHeight,
+            Math.min(
+              24,
+              rowHeight / 2,
+            ),
+          );
+
+          ctx.fillStyle =
+            "rgba(0,0,0,0.13)";
+
+          ctx.fill();
+
+          const centerY =
+            y +
+            rowHeight / 2;
+
+          ctx.textAlign =
+            "center";
+
+          ctx.fillStyle =
+            "rgba(255,255,255,0.18)";
+
+          ctx.beginPath();
+
+          ctx.arc(
+            112,
+            centerY,
+            Math.min(
+              21,
+              rowHeight *
+                0.31,
+            ),
+            0,
+            Math.PI * 2,
+          );
+
+          ctx.fill();
+
+          ctx.fillStyle =
+            "rgba(255,255,255,0.82)";
+
+          ctx.font = `700 ${Math.max(
+            16,
+            Math.min(
+              22,
+              rowHeight *
+                0.3,
+            ),
+          )}px Arial, sans-serif`;
+
+          ctx.fillText(
+            String(
+              index + 1,
+            ),
+            112,
+            centerY + 7,
+          );
+
+          const countryFlag =
+            entry?.country
+              ?.flag ?? "";
+
+          ctx.font = `${Math.max(
+            18,
+            Math.min(
+              31,
+              rowHeight *
+                0.42,
+            ),
+          )}px Arial, sans-serif`;
+
+          ctx.fillText(
+            countryFlag ||
+              (entry?.entry_type ===
+              "custom"
+                ? "✦"
+                : "•"),
+            170,
+            centerY + 9,
+          );
+
+          ctx.textAlign =
+            "left";
+
+          ctx.fillStyle =
+            "#ffffff";
+
+          ctx.font = `600 ${Math.max(
+            17,
+            Math.min(
+              26,
+              rowHeight *
+                0.34,
+            ),
+          )}px Arial, sans-serif`;
+
+          ctx.fillText(
+            fitText(
+              ctx,
+              getEntryDisplayName(
+                entry,
+              ),
+              600,
+            ),
+            210,
+            centerY + 8,
+          );
+
+          ctx.textAlign =
+            "right";
+
+          ctx.fillStyle =
+            "#76f0e1";
+
+          ctx.font = `700 ${Math.max(
+            20,
+            Math.min(
+              34,
+              rowHeight *
+                0.45,
+            ),
+          )}px Arial, sans-serif`;
+
+          ctx.fillText(
+            String(
+              item.points,
+            ),
+            945,
+            centerY + 9,
+          );
+        },
+      );
+
+      ctx.textAlign =
+        "center";
+
+      ctx.fillStyle =
+        "rgba(255,255,255,0.48)";
+
+      ctx.font =
+        "500 18px Arial, sans-serif";
+
+      ctx.fillText(
+        "#GETTINGHIGH · SOLARIS TELEVOTE",
+        width / 2,
+        1280,
+      );
+
+      return canvas;
+    };
+
+  const dataUrlToBlob = (
+    dataUrl: string,
+  ) => {
+    const [
+      header,
+      base64,
+    ] =
+      dataUrl.split(",");
+
+    const mime =
+      header.match(
+        /data:(.*?);base64/,
+      )?.[1] ??
+      "image/png";
+
+    const binary =
+      atob(base64);
+
+    const bytes =
+      new Uint8Array(
+        binary.length,
+      );
+
+    for (
+      let index = 0;
+      index <
+      binary.length;
+      index += 1
+    ) {
+      bytes[index] =
+        binary.charCodeAt(
+          index,
+        );
+    }
+
+    return new Blob(
+      [bytes],
+      {
+        type: mime,
+      },
+    );
+  };
+
+  const saveImage = async (
+    format:
+      | "png"
+      | "jpg",
   ) => {
     if (
       !confirmation ||
-      !exportRef.current ||
       exporting
     ) {
       return;
     }
 
     try {
-      setExporting(format);
+      setExporting(
+        format,
+      );
 
-      /*
-       * This is deliberately a rendered copy of the visible vote card rather
-       * than a screenshot of the whole page. The action buttons therefore do
-       * not end up inside the downloaded image.
-       *
-       * cacheBust helps when country flags / entry artwork are remote images.
-       * A high pixel ratio keeps text and flags sharp when shared on Instagram.
-       */
-      const options = {
-        cacheBust: true,
-        pixelRatio: 3,
-        backgroundColor: "#07122f",
-      };
+      const canvas =
+        createVoteCanvas();
+
+      if (!canvas) {
+        throw new Error(
+          "Could not create image canvas",
+        );
+      }
+
+      const mime =
+        format === "png"
+          ? "image/png"
+          : "image/jpeg";
 
       const dataUrl =
-        format === "png"
-          ? await toPng(
-              exportRef.current,
-              options,
-            )
-          : await toJpeg(
-              exportRef.current,
-              {
-                ...options,
-                quality: 0.95,
-              },
-            );
+        canvas.toDataURL(
+          mime,
+          format === "jpg"
+            ? 0.94
+            : undefined,
+        );
 
-      triggerDownload(
-        dataUrl,
-        buildFileName(format),
+      const blob =
+        dataUrlToBlob(
+          dataUrl,
+        );
+
+      const fileName = `${fileBaseName()}.${format}`;
+
+      const file =
+        new File(
+          [blob],
+          fileName,
+          {
+            type: mime,
+          },
+        );
+
+      if (
+        typeof navigator !==
+          "undefined" &&
+        navigator.share &&
+        navigator.canShare?.({
+          files: [file],
+        })
+      ) {
+        await navigator.share({
+          title:
+            "My Solaris televote",
+          files: [file],
+        });
+
+        return;
+      }
+
+      const url =
+        URL.createObjectURL(
+          blob,
+        );
+
+      const link =
+        document.createElement(
+          "a",
+        );
+
+      link.href = url;
+      link.download =
+        fileName;
+      link.rel =
+        "noopener";
+
+      document.body.appendChild(
+        link,
+      );
+
+      link.click();
+      link.remove();
+
+      window.setTimeout(
+        () =>
+          URL.revokeObjectURL(
+            url,
+          ),
+        2000,
       );
 
       toast.success(
-        `${format.toUpperCase()} vote overview created`,
+        `${format.toUpperCase()} downloaded`,
       );
-    } catch (error) {
+    } catch (
+      error: any
+    ) {
+      if (
+        error?.name ===
+        "AbortError"
+      ) {
+        return;
+      }
+
       console.error(
-        "Vote overview export failed",
+        "Vote image export failed",
         error,
       );
 
       toast.error(
-        "Could not create the vote image. Try PNG if JPG fails.",
+        "Could not save the image. Try the other format.",
       );
     } finally {
-      setExporting(null);
+      setExporting(
+        null,
+      );
     }
   };
 
@@ -940,7 +1574,6 @@ function DoneCard({
             {editionName
               ? `${editionName} · `
               : ""}
-
             {roundName}
           </p>
 
@@ -949,7 +1582,8 @@ function DoneCard({
           </h2>
 
           <p className="text-sm text-muted-foreground">
-            Thank you for taking part in the televote. Results are revealed later.
+            Your submitted ballot is saved in this browser, so you can come
+            back to this round and see who you voted for again.
           </p>
         </div>
       </div>
@@ -957,7 +1591,6 @@ function DoneCard({
       {confirmation ? (
         <>
           <div
-            ref={exportRef}
             className="overflow-hidden rounded-[30px] border border-white/20 p-[1px] shadow-2xl"
             style={{
               background:
@@ -1000,12 +1633,16 @@ function DoneCard({
                 <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-white/12 bg-white/[0.07] px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-white">
-                      {confirmation.username}
+                      {
+                        confirmation.username
+                      }
                     </p>
 
                     <div className="mt-0.5 inline-flex max-w-full items-center gap-1.5 text-xs text-white/65">
                       <CountryFlag
-                        country={homeCountry}
+                        country={
+                          homeCountry
+                        }
                         size={16}
                       />
 
@@ -1019,7 +1656,9 @@ function DoneCard({
 
                   <div className="shrink-0 text-right">
                     <p className="text-xl font-bold tabular-nums text-white">
-                      {totalPoints}
+                      {
+                        totalPoints
+                      }
                     </p>
 
                     <p className="text-[9px] uppercase tracking-[0.18em] text-white/55">
@@ -1030,7 +1669,10 @@ function DoneCard({
 
                 <div className="mt-4 space-y-2">
                   {sortedBreakdown.map(
-                    (item, index) => {
+                    (
+                      item,
+                      index,
+                    ) => {
                       const entry =
                         byEntryKey.get(
                           item.entryKey,
@@ -1044,14 +1686,17 @@ function DoneCard({
                           className="grid grid-cols-[28px_30px_minmax(0,1fr)_54px] items-center gap-2 rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5"
                         >
                           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80">
-                            {index + 1}
+                            {index +
+                              1}
                           </div>
 
                           <EntryAvatar
                             entry={
                               entry
                             }
-                            size={28}
+                            size={
+                              28
+                            }
                           />
 
                           <div className="min-w-0">
@@ -1089,7 +1734,7 @@ function DoneCard({
 
                 <div className="mt-5 border-t border-white/10 pt-3 text-center">
                   <p className="text-[9px] uppercase tracking-[0.22em] text-white/45">
-                    Solaris Televote
+                    #GETTINGHIGH · Solaris Televote
                   </p>
                 </div>
               </div>
@@ -1098,7 +1743,8 @@ function DoneCard({
 
           <div className="glass-strong space-y-3 rounded-2xl p-4">
             <p className="text-center text-xs text-muted-foreground">
-              Save your vote overview as an image or share the text version.
+              On iPhone, PNG/JPG opens the share sheet so the voter can choose
+              Save Image. On desktop it downloads the file directly.
             </p>
 
             <div className="grid grid-cols-2 gap-2">
@@ -1106,10 +1752,13 @@ function DoneCard({
                 variant="outline"
                 className="h-11"
                 disabled={
-                  exporting !== null
+                  exporting !==
+                  null
                 }
                 onClick={() =>
-                  exportImage("png")
+                  saveImage(
+                    "png",
+                  )
                 }
               >
                 {exporting ===
@@ -1119,17 +1768,20 @@ function DoneCard({
                   <Download className="h-4 w-4" />
                 )}
 
-                PNG
+                Save PNG
               </Button>
 
               <Button
                 variant="outline"
                 className="h-11"
                 disabled={
-                  exporting !== null
+                  exporting !==
+                  null
                 }
                 onClick={() =>
-                  exportImage("jpg")
+                  saveImage(
+                    "jpg",
+                  )
                 }
               >
                 {exporting ===
@@ -1139,7 +1791,7 @@ function DoneCard({
                   <ImageIcon className="h-4 w-4" />
                 )}
 
-                JPG
+                Save JPG
               </Button>
             </div>
 
@@ -1149,15 +1801,15 @@ function DoneCard({
               onClick={share}
             >
               <Share2 className="h-4 w-4" />
-
               Share my vote
             </Button>
           </div>
         </>
       ) : (
         <div className="glass-strong rounded-2xl p-5 text-center text-sm text-muted-foreground">
-          This browser already recorded a vote for this round, so the previous
-          ballot overview is not available on this device.
+          This browser knows that a vote was submitted for this round, but it
+          does not have the old receipt. New submissions will keep the full
+          ballot visible here on future visits.
         </div>
       )}
     </section>
