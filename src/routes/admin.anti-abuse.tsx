@@ -1,32 +1,50 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  Eye,
+  FileJson,
+  Flag,
+  Globe,
+  Loader2,
+  MessageSquare,
+  RefreshCcw,
+  RotateCcw,
+  Search,
   ShieldAlert,
   ShieldCheck,
-  RefreshCcw,
-  Download,
-  FileJson,
-  Search,
-  Loader2,
-  AlertTriangle,
   Trash2,
-  RotateCcw,
-  MessageSquare,
-  Globe,
   Wifi,
-  Eye,
-  CheckCircle2,
-  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
+
 import { AdminShell } from "@/components/admin-shell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { CountryFlag } from "@/components/country-flag";
+import { EntryAvatar } from "@/components/entry-avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -34,55 +52,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useEntryKeyCatalog } from "@/hooks/use-entry-key-catalog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { useAllRounds, useAllCountries } from "@/hooks/use-round-results";
+  useAllCountries,
+  useAllRounds,
+} from "@/hooks/use-round-results";
 import { downloadCSV, downloadJSON } from "@/lib/export";
-import { cn } from "@/lib/utils";
+import {
+  entryMap,
+  getEntryDisplayName,
+} from "@/lib/round-entries";
 import {
   listModerationSubmissions,
+  restoreSubmission,
   setSubmissionStatus,
   softDeleteSubmission,
-  restoreSubmission,
   updateSubmissionNote,
   type ModerationSubmission,
 } from "@/lib/moderation.functions";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/anti-abuse")({
-  head: () => ({ meta: [{ title: "Moderation — Solaris Admin" }] }),
+  head: () => ({
+    meta: [{ title: "Moderation — Solaris Admin" }],
+  }),
   component: ModerationPage,
 });
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-primary/15 text-primary border-primary/30",
-  suspicious: "bg-amber-500/15 text-amber-400 border-amber-400/40",
-  verified: "bg-emerald-500/15 text-emerald-400 border-emerald-400/40",
-  deleted: "bg-destructive/15 text-destructive border-destructive/40",
+  suspicious:
+    "bg-amber-500/15 text-amber-400 border-amber-400/40",
+  verified:
+    "bg-emerald-500/15 text-emerald-400 border-emerald-400/40",
+  deleted:
+    "bg-destructive/15 text-destructive border-destructive/40",
 };
 
 function ModerationPage() {
   const qc = useQueryClient();
+
   const { data: rounds } = useAllRounds();
   const { data: countries } = useAllCountries();
-  const [roundId, setRoundId] = useState<string>("all");
-  const [status, setStatus] = useState<string>("all");
+
+  const [roundId, setRoundId] = useState("all");
+  const [status, setStatus] = useState("all");
   const [q, setQ] = useState("");
   const [showDeleted, setShowDeleted] = useState(false);
-  const [detail, setDetail] = useState<ModerationSubmission | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ModerationSubmission | null>(
-    null,
-  );
+
+  const [detail, setDetail] =
+    useState<ModerationSubmission | null>(null);
+
+  const [deleteTarget, setDeleteTarget] =
+    useState<ModerationSubmission | null>(null);
+
   const [deleteReason, setDeleteReason] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
 
@@ -92,113 +116,234 @@ function ModerationPage() {
   const restoreFn = useServerFn(restoreSubmission);
   const noteFn = useServerFn(updateSubmissionNote);
 
-  const byCode = useMemo(() => {
-    const m = new Map<string, { name: string; flag: string; flag_url: string | null }>();
-    (countries ?? []).forEach((c) => m.set(c.code, c));
-    return m;
-  }, [countries]);
-
-  const roundName = (id: string | null) =>
-    rounds?.find((r) => r.id === id)?.name ?? "—";
-
   const subs = useQuery({
     queryKey: ["moderation-subs", roundId],
     queryFn: () =>
-      listFn({ data: { roundId: roundId === "all" ? null : roundId } }) as Promise<
-        ModerationSubmission[]
-      >,
+      listFn({
+        data: {
+          roundId: roundId === "all" ? null : roundId,
+        },
+      }) as Promise<ModerationSubmission[]>,
     refetchInterval: 20_000,
   });
 
+  const targetKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (subs.data ?? []).flatMap((submission) =>
+            submission.entries.map(
+              (entry) => entry.target_country_code,
+            ),
+          ),
+        ),
+      ),
+    [subs.data],
+  );
+
+  const { data: targetEntries = [] } =
+    useEntryKeyCatalog(targetKeys);
+
+  const byEntryKey = useMemo(
+    () => entryMap(targetEntries),
+    [targetEntries],
+  );
+
+  /*
+   * Voter identity is still a Solaris country.
+   */
+  const byCountryCode = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        name: string;
+        flag: string;
+        flag_url: string | null;
+      }
+    >();
+
+    for (const country of countries ?? []) {
+      map.set(country.code, country);
+    }
+
+    return map;
+  }, [countries]);
+
+  const targetName = (entryKey: string) => {
+    const entry = byEntryKey.get(entryKey);
+
+    return entry
+      ? getEntryDisplayName(entry)
+      : entryKey;
+  };
+
+  const roundName = (id: string | null) =>
+    rounds?.find((round) => round.id === id)?.name ?? "—";
+
   const invalidateAll = () => {
-    qc.invalidateQueries({ queryKey: ["moderation-subs"] });
-    qc.invalidateQueries({ queryKey: ["moderation-alerts"] });
+    void qc.invalidateQueries({
+      queryKey: ["moderation-subs"],
+    });
+
+    void qc.invalidateQueries({
+      queryKey: ["moderation-alerts"],
+    });
+
+    void qc.invalidateQueries({
+      queryKey: ["entry-key-catalog"],
+    });
   };
 
   const statusMut = useMutation({
-    mutationFn: (v: {
+    mutationFn: (value: {
       id: string;
       status: "active" | "suspicious" | "verified";
-    }) => statusFn({ data: v }),
+    }) => statusFn({ data: value }),
+
     onSuccess: () => {
       toast.success("Status updated");
       invalidateAll();
     },
-    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Failed"),
   });
 
   const deleteMut = useMutation({
-    mutationFn: (v: { id: string; reason: string }) => deleteFn({ data: v }),
+    mutationFn: (value: {
+      id: string;
+      reason: string;
+    }) => deleteFn({ data: value }),
+
     onSuccess: () => {
       toast.success("Vote deleted");
       setDeleteTarget(null);
       setDeleteReason("");
       invalidateAll();
     },
-    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Failed"),
   });
 
   const restoreMut = useMutation({
-    mutationFn: (id: string) => restoreFn({ data: { id } }),
+    mutationFn: (id: string) =>
+      restoreFn({ data: { id } }),
+
     onSuccess: () => {
       toast.success("Vote restored");
       invalidateAll();
     },
-    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Failed"),
   });
 
   const noteMut = useMutation({
-    mutationFn: (v: { id: string; note: string }) => noteFn({ data: v }),
+    mutationFn: (value: {
+      id: string;
+      note: string;
+    }) => noteFn({ data: value }),
+
     onSuccess: () => {
       toast.success("Note saved");
       invalidateAll();
     },
-    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+
+    onError: (error: any) =>
+      toast.error(error?.message ?? "Failed"),
   });
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return (subs.data ?? []).filter((s) => {
-      if (!showDeleted && s.status === "deleted") return false;
-      if (status !== "all" && s.status !== status) return false;
-      if (term) {
-        const hay = `${s.username} ${s.country_code} ${s.ip_country ?? ""}`.toLowerCase();
-        if (!hay.includes(term)) return false;
+
+    return (subs.data ?? []).filter((submission) => {
+      if (!showDeleted && submission.status === "deleted") {
+        return false;
       }
+
+      if (status !== "all" && submission.status !== status) {
+        return false;
+      }
+
+      if (term) {
+        const targets = submission.entries
+          .map((entry) => {
+            const entryKey = entry.target_country_code;
+            const resolved = byEntryKey.get(entryKey);
+
+            return resolved
+              ? `${getEntryDisplayName(resolved)} ${entryKey}`
+              : entryKey;
+          })
+          .join(" ");
+
+        const haystack = [
+          submission.username,
+          submission.country_code,
+          submission.ip_country ?? "",
+          targets,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(term)) return false;
+      }
+
       return true;
     });
-  }, [subs.data, status, q, showDeleted]);
+  }, [
+    subs.data,
+    showDeleted,
+    status,
+    q,
+    byEntryKey,
+  ]);
 
   const totals = useMemo(() => {
     const all = subs.data ?? [];
+
     return {
       total: all.length,
-      suspicious: all.filter((s) => s.status === "suspicious").length,
-      verified: all.filter((s) => s.status === "verified").length,
-      deleted: all.filter((s) => s.status === "deleted").length,
-      vpn: all.filter((s) => s.is_vpn).length,
+      suspicious: all.filter(
+        (submission) => submission.status === "suspicious",
+      ).length,
+      verified: all.filter(
+        (submission) => submission.status === "verified",
+      ).length,
+      deleted: all.filter(
+        (submission) => submission.status === "deleted",
+      ).length,
+      vpn: all.filter((submission) => submission.is_vpn).length,
       mismatch: all.filter(
-        (s) =>
-          s.ip_country &&
-          s.ip_country.toUpperCase() !== s.country_code.toUpperCase(),
+        (submission) =>
+          submission.ip_country &&
+          submission.ip_country.toUpperCase() !==
+            submission.country_code.toUpperCase(),
       ).length,
     };
   }, [subs.data]);
 
   const exportRows = () =>
-    filtered.map((s) => ({
-      timestamp: s.created_at,
-      username: s.username,
-      home_country: byCode.get(s.country_code)?.name ?? s.country_code,
-      home_code: s.country_code,
-      ip_country: s.ip_country ?? "",
-      is_vpn: s.is_vpn,
-      status: s.status,
-      risk_score: s.risk_score,
-      round: roundName(s.round_id),
-      moderator_note: s.moderator_note ?? "",
-      entries: s.entries
-        .map((e) => `${e.target_country_code}:${e.points}`)
+    filtered.map((submission) => ({
+      timestamp: submission.created_at,
+      username: submission.username,
+      home_country:
+        byCountryCode.get(submission.country_code)?.name ??
+        submission.country_code,
+      home_code: submission.country_code,
+      ip_country: submission.ip_country ?? "",
+      is_vpn: submission.is_vpn,
+      status: submission.status,
+      risk_score: submission.risk_score,
+      round: roundName(submission.round_id),
+      moderator_note: submission.moderator_note ?? "",
+      entries: submission.entries
+        .map((entry) => {
+          const entryKey = entry.target_country_code;
+
+          return `${targetName(entryKey)} [${entryKey}]:${entry.points}`;
+        })
         .join("|"),
     }));
 
@@ -207,282 +352,396 @@ function ModerationPage() {
       <div className="space-y-6">
         <section className="glass-strong rounded-2xl p-5 sm:p-6">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-hero grid place-items-center shadow-glow">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-hero shadow-glow">
               <ShieldAlert className="h-5 w-5 text-primary-foreground" />
             </div>
+
             <div>
               <p className="text-xs uppercase tracking-widest text-primary">
                 Vote integrity
               </p>
-              <h2 className="text-xl font-bold">Moderation dashboard</h2>
+
+              <h2 className="text-xl font-bold">
+                Moderation dashboard
+              </h2>
+
               <p className="text-xs text-muted-foreground">
-                Review, verify, edit or remove submitted ballots. Every action is
-                recorded in the audit log.
+                Voter identity remains the selected Solaris country.
+                Ballot targets are generic round entries identified by stable
+                entry keys.
               </p>
             </div>
           </div>
         </section>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Ballots" value={totals.total} />
-          <Stat label="Suspicious" value={totals.suspicious} accent />
+          <Stat
+            label="Suspicious"
+            value={totals.suspicious}
+            accent
+          />
           <Stat label="Verified" value={totals.verified} />
           <Stat label="Deleted" value={totals.deleted} />
-          <Stat label="VPN / proxy" value={totals.vpn} accent />
-          <Stat label="Country mismatch" value={totals.mismatch} />
+          <Stat
+            label="VPN / proxy"
+            value={totals.vpn}
+            accent
+          />
+          <Stat
+            label="Country mismatch"
+            value={totals.mismatch}
+          />
         </div>
 
-        {/* Filters */}
-        <section className="glass rounded-2xl p-3 sm:p-4 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[180px]">
-            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <section className="glass flex flex-wrap items-center gap-2 rounded-2xl p-3 sm:p-4">
+          <div className="relative min-w-[180px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
             <Input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search username or country…"
+              onChange={(event) => setQ(event.target.value)}
+              placeholder="Search voter or target entry…"
               className="pl-9"
             />
           </div>
+
           <Select value={roundId} onValueChange={setRoundId}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Round" />
             </SelectTrigger>
+
             <SelectContent>
-              <SelectItem value="all">All rounds</SelectItem>
-              {(rounds ?? []).map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  {r.edition_name ? `${r.edition_name} · ` : ""}
-                  {r.name}
+              <SelectItem value="all">
+                All rounds
+              </SelectItem>
+
+              {(rounds ?? []).map((round) => (
+                <SelectItem key={round.id} value={round.id}>
+                  {round.edition_name
+                    ? `${round.edition_name} · `
+                    : ""}
+                  {round.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
+
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="suspicious">Suspicious</SelectItem>
-              <SelectItem value="verified">Verified</SelectItem>
-              <SelectItem value="deleted">Deleted</SelectItem>
+              <SelectItem value="all">
+                All statuses
+              </SelectItem>
+              <SelectItem value="active">
+                Active
+              </SelectItem>
+              <SelectItem value="suspicious">
+                Suspicious
+              </SelectItem>
+              <SelectItem value="verified">
+                Verified
+              </SelectItem>
+              <SelectItem value="deleted">
+                Deleted
+              </SelectItem>
             </SelectContent>
           </Select>
+
           <Button
             variant={showDeleted ? "default" : "outline"}
             size="sm"
-            onClick={() => setShowDeleted((v) => !v)}
+            onClick={() => setShowDeleted((value) => !value)}
           >
             {showDeleted ? "Hiding" : "Show"} deleted
           </Button>
+
           <Button
             variant="outline"
             size="sm"
-            onClick={() => invalidateAll()}
+            onClick={invalidateAll}
           >
             <RefreshCcw className="h-4 w-4" />
             Refresh
           </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" className="bg-hero text-primary-foreground">
+              <Button
+                size="sm"
+                className="bg-hero text-primary-foreground"
+              >
                 <Download className="h-4 w-4" />
                 Export
               </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={() =>
                   downloadCSV(
-                    `solaris-moderation-${new Date().toISOString().slice(0, 10)}.csv`,
+                    `solaris-moderation-${new Date()
+                      .toISOString()
+                      .slice(0, 10)}.csv`,
                     exportRows(),
-                    [
-                      "timestamp",
-                      "username",
-                      "home_country",
-                      "home_code",
-                      "ip_country",
-                      "is_vpn",
-                      "status",
-                      "risk_score",
-                      "round",
-                      "moderator_note",
-                      "entries",
-                    ],
                   )
                 }
               >
-                <Download className="h-4 w-4" /> CSV
+                <Download className="h-4 w-4" />
+                CSV
               </DropdownMenuItem>
+
               <DropdownMenuItem
                 onClick={() =>
                   downloadJSON(
-                    `solaris-moderation-${new Date().toISOString().slice(0, 10)}.json`,
+                    `solaris-moderation-${new Date()
+                      .toISOString()
+                      .slice(0, 10)}.json`,
                     exportRows(),
                   )
                 }
               >
-                <FileJson className="h-4 w-4" /> JSON
+                <FileJson className="h-4 w-4" />
+                JSON
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </section>
 
-        {/* List */}
         {subs.isLoading ? (
-          <div className="glass-strong rounded-2xl p-10 grid place-items-center">
+          <div className="glass-strong grid place-items-center rounded-2xl p-10">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="glass-strong rounded-2xl p-10 text-center text-sm text-muted-foreground">
-            <ShieldCheck className="h-8 w-8 mx-auto mb-2 text-primary/70" />
+            <ShieldCheck className="mx-auto mb-2 h-8 w-8 text-primary/70" />
             No ballots match the current filters.
           </div>
         ) : (
           <ul className="space-y-2">
-            {filtered.map((s) => {
-              const homeC = byCode.get(s.country_code);
-              const ipC = s.ip_country ? byCode.get(s.ip_country) : null;
+            {filtered.map((submission) => {
+              const homeCountry =
+                byCountryCode.get(submission.country_code);
+
+              const ipCountry = submission.ip_country
+                ? byCountryCode.get(submission.ip_country)
+                : null;
+
               const mismatch =
-                s.ip_country &&
-                s.ip_country.toUpperCase() !== s.country_code.toUpperCase();
+                submission.ip_country &&
+                submission.ip_country.toUpperCase() !==
+                  submission.country_code.toUpperCase();
+
               return (
                 <li
-                  key={s.id}
+                  key={submission.id}
                   className={cn(
                     "glass rounded-xl p-3 sm:p-4",
-                    s.status === "suspicious" && "ring-1 ring-amber-400/30",
-                    s.status === "deleted" && "opacity-60",
+                    submission.status === "suspicious" &&
+                      "ring-1 ring-amber-400/30",
+                    submission.status === "deleted" &&
+                      "opacity-60",
                   )}
                 >
                   <div className="flex items-start gap-3">
                     <div
                       className={cn(
-                        "h-9 w-9 shrink-0 rounded-lg grid place-items-center",
-                        s.status === "suspicious"
+                        "grid h-9 w-9 shrink-0 place-items-center rounded-lg",
+                        submission.status === "suspicious"
                           ? "bg-amber-500/20 text-amber-400"
-                          : s.status === "verified"
+                          : submission.status === "verified"
                             ? "bg-emerald-500/20 text-emerald-400"
-                            : s.status === "deleted"
+                            : submission.status === "deleted"
                               ? "bg-destructive/20 text-destructive"
                               : "bg-primary/15 text-primary",
                       )}
                     >
-                      {s.status === "verified" ? (
+                      {submission.status === "verified" ? (
                         <CheckCircle2 className="h-4 w-4" />
-                      ) : s.status === "deleted" ? (
+                      ) : submission.status === "deleted" ? (
                         <Trash2 className="h-4 w-4" />
                       ) : (
                         <AlertTriangle className="h-4 w-4" />
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm truncate">
-                          {s.username}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-semibold">
+                          {submission.username}
                         </span>
+
                         <Badge
                           variant="outline"
-                          className="text-[10px] inline-flex items-center gap-1"
+                          className="inline-flex gap-1 text-[10px]"
                         >
-                          <CountryFlag country={homeC} size={12} />
-                          {homeC?.name ?? s.country_code}
+                          <CountryFlag
+                            country={homeCountry}
+                            size={12}
+                          />
+                          {homeCountry?.name ?? submission.country_code}
                         </Badge>
+
                         <Badge
                           variant="outline"
-                          className={cn("text-[10px] uppercase tracking-wide", STATUS_STYLES[s.status])}
+                          className={cn(
+                            "text-[10px] uppercase tracking-wide",
+                            STATUS_STYLES[submission.status],
+                          )}
                         >
-                          {s.status}
+                          {submission.status}
                         </Badge>
+
                         <Badge
                           variant="outline"
                           className={cn(
                             "text-[10px]",
-                            s.risk_score >= 70
-                              ? "text-destructive border-destructive/40"
-                              : s.risk_score >= 30
-                                ? "text-amber-400 border-amber-400/40"
+                            submission.risk_score >= 70
+                              ? "border-destructive/40 text-destructive"
+                              : submission.risk_score >= 30
+                                ? "border-amber-400/40 text-amber-400"
                                 : "",
                           )}
                         >
-                          risk {s.risk_score}
+                          risk {submission.risk_score}
                         </Badge>
-                        {s.is_vpn && (
+
+                        {submission.is_vpn ? (
                           <Badge
                             variant="outline"
-                            className="text-[10px] inline-flex items-center gap-1 text-amber-400 border-amber-400/40"
+                            className="inline-flex gap-1 border-amber-400/40 text-[10px] text-amber-400"
                           >
-                            <Wifi className="h-3 w-3" /> VPN
+                            <Wifi className="h-3 w-3" />
+                            VPN
                           </Badge>
-                        )}
-                        {mismatch && (
+                        ) : null}
+
+                        {mismatch ? (
                           <Badge
                             variant="outline"
-                            className="text-[10px] inline-flex items-center gap-1 text-amber-400 border-amber-400/40"
+                            className="inline-flex gap-1 border-amber-400/40 text-[10px] text-amber-400"
                           >
                             <Globe className="h-3 w-3" />
-                            IP {ipC?.name ?? s.ip_country}
+                            IP {ipCountry?.name ?? submission.ip_country}
                           </Badge>
-                        )}
+                        ) : null}
                       </div>
+
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {roundName(s.round_id)} ·{" "}
-                        {new Date(s.created_at).toLocaleString()} ·{" "}
-                        {s.entries.length} countries ·{" "}
-                        {s.entries.reduce((a, b) => a + b.points, 0)} pts
+                        {roundName(submission.round_id)} ·{" "}
+                        {new Date(
+                          submission.created_at,
+                        ).toLocaleString()}{" "}
+                        · {submission.entries.length} entries ·{" "}
+                        {submission.entries.reduce(
+                          (sum, entry) => sum + entry.points,
+                          0,
+                        )}{" "}
+                        pts
                       </div>
-                      {s.moderator_note && (
-                        <div className="mt-2 text-[11px] text-muted-foreground italic border-l-2 border-primary/40 pl-2">
-                          <MessageSquare className="inline h-3 w-3 mr-1" />
-                          {s.moderator_note}
+
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {[...submission.entries]
+                          .sort((a, b) => b.points - a.points)
+                          .slice(0, 4)
+                          .map((ballotEntry) => {
+                            const entryKey =
+                              ballotEntry.target_country_code;
+
+                            const resolved =
+                              byEntryKey.get(entryKey);
+
+                            return (
+                              <Badge
+                                key={entryKey}
+                                variant="outline"
+                                className="inline-flex max-w-[180px] gap-1 text-[10px]"
+                              >
+                                <EntryAvatar
+                                  entry={resolved}
+                                  size={13}
+                                />
+
+                                <span className="truncate">
+                                  {targetName(entryKey)}
+                                </span>
+
+                                <span className="font-semibold tabular-nums text-primary">
+                                  {ballotEntry.points}
+                                </span>
+                              </Badge>
+                            );
+                          })}
+                      </div>
+
+                      {submission.moderator_note ? (
+                        <div className="mt-2 border-l-2 border-primary/40 pl-2 text-[11px] italic text-muted-foreground">
+                          <MessageSquare className="mr-1 inline h-3 w-3" />
+                          {submission.moderator_note}
                         </div>
-                      )}
+                      ) : null}
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-1 shrink-0">
+
+                    <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          setDetail(s);
-                          setNoteDraft(s.moderator_note ?? "");
+                          setDetail(submission);
+                          setNoteDraft(
+                            submission.moderator_note ?? "",
+                          );
                         }}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
-                      {s.status !== "deleted" && s.status !== "verified" && (
+
+                      {submission.status !== "deleted" &&
+                      submission.status !== "verified" ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-emerald-400 border-emerald-400/40"
+                          className="border-emerald-400/40 text-emerald-400"
                           onClick={() =>
-                            statusMut.mutate({ id: s.id, status: "verified" })
+                            statusMut.mutate({
+                              id: submission.id,
+                              status: "verified",
+                            })
                           }
                           disabled={statusMut.isPending}
                         >
                           <CheckCircle2 className="h-4 w-4" />
                         </Button>
-                      )}
-                      {s.status !== "deleted" && s.status !== "suspicious" && (
+                      ) : null}
+
+                      {submission.status !== "deleted" &&
+                      submission.status !== "suspicious" ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-amber-400 border-amber-400/40"
+                          className="border-amber-400/40 text-amber-400"
                           onClick={() =>
-                            statusMut.mutate({ id: s.id, status: "suspicious" })
+                            statusMut.mutate({
+                              id: submission.id,
+                              status: "suspicious",
+                            })
                           }
                           disabled={statusMut.isPending}
                         >
                           <Flag className="h-4 w-4" />
                         </Button>
-                      )}
-                      {s.status !== "deleted" ? (
+                      ) : null}
+
+                      {submission.status !== "deleted" ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-destructive border-destructive/40"
+                          className="border-destructive/40 text-destructive"
                           onClick={() => {
-                            setDeleteTarget(s);
+                            setDeleteTarget(submission);
                             setDeleteReason("");
                           }}
                         >
@@ -492,7 +751,9 @@ function ModerationPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => restoreMut.mutate(s.id)}
+                          onClick={() =>
+                            restoreMut.mutate(submission.id)
+                          }
                           disabled={restoreMut.isPending}
                         >
                           <RotateCcw className="h-4 w-4" />
@@ -507,67 +768,117 @@ function ModerationPage() {
         )}
       </div>
 
-      {/* Detail dialog */}
-      <Dialog open={!!detail} onOpenChange={(v) => !v && setDetail(null)}>
+      <Dialog
+        open={Boolean(detail)}
+        onOpenChange={(open) => {
+          if (!open) setDetail(null);
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Ballot detail</DialogTitle>
+            <DialogTitle>
+              Ballot detail
+            </DialogTitle>
           </DialogHeader>
-          {detail && (
+
+          {detail ? (
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <Info label="Username" value={detail.username} />
-                <Info label="Home" value={detail.country_code} />
-                <Info label="IP country" value={detail.ip_country ?? "—"} />
-                <Info label="VPN" value={detail.is_vpn ? "Yes" : "No"} />
-                <Info label="Risk" value={String(detail.risk_score)} />
-                <Info label="Status" value={detail.status} />
+                <Info
+                  label="Home"
+                  value={
+                    byCountryCode.get(detail.country_code)?.name ??
+                    detail.country_code
+                  }
+                />
+                <Info
+                  label="IP country"
+                  value={detail.ip_country ?? "—"}
+                />
+                <Info
+                  label="VPN"
+                  value={detail.is_vpn ? "Yes" : "No"}
+                />
+                <Info
+                  label="Risk"
+                  value={String(detail.risk_score)}
+                />
+                <Info
+                  label="Status"
+                  value={detail.status}
+                />
                 <Info
                   label="Submitted"
-                  value={new Date(detail.created_at).toLocaleString()}
+                  value={new Date(
+                    detail.created_at,
+                  ).toLocaleString()}
                 />
-                <Info label="Round" value={roundName(detail.round_id)} />
+                <Info
+                  label="Round"
+                  value={roundName(detail.round_id)}
+                />
               </div>
+
               <div>
-                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
+                <p className="mb-1 text-xs uppercase tracking-widest text-muted-foreground">
                   Points breakdown
                 </p>
-                <ul className="text-xs space-y-1">
+
+                <ul className="space-y-1 text-xs">
                   {[...detail.entries]
                     .sort((a, b) => b.points - a.points)
-                    .map((e) => (
-                      <li
-                        key={e.target_country_code}
-                        className="flex items-center gap-2"
-                      >
-                        <CountryFlag
-                          country={byCode.get(e.target_country_code)}
-                          size={14}
-                        />
-                        <span className="flex-1 truncate">
-                          {byCode.get(e.target_country_code)?.name ??
-                            e.target_country_code}
-                        </span>
-                        <span className="tabular-nums font-semibold">
-                          {e.points}
-                        </span>
-                      </li>
-                    ))}
+                    .map((ballotEntry) => {
+                      const entryKey =
+                        ballotEntry.target_country_code;
+
+                      const resolved =
+                        byEntryKey.get(entryKey);
+
+                      return (
+                        <li
+                          key={entryKey}
+                          className="flex items-center gap-2"
+                        >
+                          <EntryAvatar
+                            entry={resolved}
+                            size={16}
+                          />
+
+                          <span className="min-w-0 flex-1 truncate">
+                            {targetName(entryKey)}
+                          </span>
+
+                          <span className="text-[10px] text-muted-foreground">
+                            {entryKey}
+                          </span>
+
+                          <span className="font-semibold tabular-nums">
+                            {ballotEntry.points}
+                          </span>
+                        </li>
+                      );
+                    })}
                 </ul>
               </div>
+
               <div>
-                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
+                <p className="mb-1 text-xs uppercase tracking-widest text-muted-foreground">
                   Moderator note
                 </p>
+
                 <Textarea
                   value={noteDraft}
-                  onChange={(e) => setNoteDraft(e.target.value)}
+                  onChange={(event) =>
+                    setNoteDraft(event.target.value)
+                  }
                   placeholder="Add context for future moderators…"
                   rows={3}
                 />
               </div>
             </div>
-          )}
+          ) : null}
+
           <DialogFooter>
             <Button
               variant="outline"
@@ -575,10 +886,16 @@ function ModerationPage() {
             >
               Close
             </Button>
+
             <Button
               onClick={() => {
                 if (!detail) return;
-                noteMut.mutate({ id: detail.id, note: noteDraft });
+
+                noteMut.mutate({
+                  id: detail.id,
+                  note: noteDraft,
+                });
+
                 setDetail(null);
               }}
               disabled={noteMut.isPending}
@@ -589,36 +906,53 @@ function ModerationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete dialog */}
       <Dialog
-        open={!!deleteTarget}
-        onOpenChange={(v) => !v && setDeleteTarget(null)}
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete this ballot?</DialogTitle>
+            <DialogTitle>
+              Delete this ballot?
+            </DialogTitle>
           </DialogHeader>
+
           <p className="text-sm text-muted-foreground">
-            The vote will be excluded from all results, but kept in the archive
-            (with your reason) for audit. The voter can re-submit.
+            The vote will be excluded from official results but kept
+            in the archive, including its stable target entry keys,
+            for integrity analysis and audit.
           </p>
+
           <Textarea
             value={deleteReason}
-            onChange={(e) => setDeleteReason(e.target.value)}
+            onChange={(event) =>
+              setDeleteReason(event.target.value)
+            }
             placeholder="Reason (required)"
             rows={3}
           />
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+            >
               Cancel
             </Button>
+
             <Button
               className="bg-destructive text-destructive-foreground"
               disabled={!deleteReason.trim() || deleteMut.isPending}
-              onClick={() =>
-                deleteTarget &&
-                deleteMut.mutate({ id: deleteTarget.id, reason: deleteReason })
-              }
+              onClick={() => {
+                if (!deleteTarget) return;
+
+                deleteMut.mutate({
+                  id: deleteTarget.id,
+                  reason: deleteReason,
+                });
+              }}
             >
               Delete vote
             </Button>
@@ -640,7 +974,10 @@ function Stat({
 }) {
   return (
     <div className="glass rounded-xl p-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground">
+        {label}
+      </div>
+
       <div
         className={cn(
           "mt-2 text-2xl font-bold tabular-nums",
@@ -653,13 +990,22 @@ function Stat({
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
     <div>
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
-      <div className="font-medium truncate">{value}</div>
+
+      <div className="truncate font-medium">
+        {value}
+      </div>
     </div>
   );
 }
