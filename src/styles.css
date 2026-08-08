@@ -1,298 +1,290 @@
-@import "tailwindcss" source(none);
-@source "../src";
-@import "tw-animate-css";
-
-@custom-variant dark (&:is(.dark *));
-
-@font-face {
-  font-family: "Classica";
-  src: url("/__l5e/assets-v1/eeb23245-3770-4bef-a8ec-96f14cfc0fb9/classica.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Gotham";
-  src: url("/__l5e/assets-v1/7342030e-95aa-4471-9d34-cd8ef478b226/Gotham-Thin.otf") format("opentype");
-  font-weight: 200;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Gotham";
-  src: url("/__l5e/assets-v1/136218ee-592b-40c6-92be-c72d8d67ae93/Gotham-Light.otf") format("opentype");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Gotham";
-  src: url("/__l5e/assets-v1/4d2ed0b8-e345-4276-9272-3bffa4dca540/Gotham-Book.otf") format("opentype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Gotham";
-  src: url("/__l5e/assets-v1/ca7dff94-73fb-452b-a756-11e508e893fe/Gotham-Medium.otf") format("opentype");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Gotham";
-  src: url("/__l5e/assets-v1/d896b6c8-65e0-4843-8302-88faed7dfd89/Gotham-Bold.otf") format("opentype");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-stage: var(--stage);
-  --color-stage-foreground: var(--stage-foreground);
-  --color-glow: var(--glow);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --font-display: "Gotham", "Inter", sans-serif;
-  --font-logo: "Classica", "Gotham", serif;
-}
-
-/* SSC21 Solaris Song Contest — dark stage, blue/teal/green glow */
-:root {
-  --radius: 1.75rem;
-  --background: oklch(0.16 0.04 230);
-  --foreground: oklch(0.98 0.01 220);
-
-  --stage: oklch(0.12 0.05 235);
-  --stage-foreground: oklch(0.97 0.01 220);
-
-  /* Milky Liquid Glass — mostly white with faint blue tint, very transparent */
-  --card: rgba(255, 255, 255, 0.035);
-  --card-foreground: oklch(0.99 0.01 220);
-  --popover: rgba(255, 255, 255, 0.055);
-  --popover-foreground: oklch(0.99 0.01 220);
-
-  --primary: oklch(0.82 0.14 195);
-  --primary-foreground: oklch(0.14 0.05 230);
-
-  --secondary: rgba(255, 255, 255, 0.045);
-  --secondary-foreground: oklch(0.98 0.01 220);
-
-  --muted: rgba(255, 255, 255, 0.035);
-  --muted-foreground: oklch(0.82 0.03 220);
-
-  --accent: oklch(0.75 0.16 165);
-  --accent-foreground: oklch(0.14 0.05 230);
-
-  --destructive: oklch(0.66 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.75 0.17 160);
-  --success-foreground: oklch(0.12 0.05 230);
-
-  --border: rgba(255, 255, 255, 0.28);
-  --input: rgba(255, 255, 255, 0.055);
-  --ring: oklch(0.85 0.14 190);
-
-  --glow: oklch(0.85 0.16 190);
-
-  --sidebar: rgba(255, 255, 255, 0.035);
-  --sidebar-foreground: oklch(0.96 0.02 220);
-  --sidebar-primary: oklch(0.82 0.14 195);
-  --sidebar-primary-foreground: oklch(0.14 0.05 230);
-  --sidebar-accent: rgba(255, 255, 255, 0.045);
-  --sidebar-accent-foreground: oklch(0.98 0.01 220);
-  --sidebar-border: rgba(255, 255, 255, 0.22);
-  --sidebar-ring: oklch(0.85 0.14 190);
-
-  /* Liquid Glass tint — milky bluish-white, ~10-14% */
-  --card-tint: rgba(230, 245, 255, 0.028);
-  --glass-tint-strong: rgba(230, 245, 255, 0.045);
-
-  --gradient-stage:
-    radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.55 0.22 190 / 0.55), transparent 60%),
-    radial-gradient(ellipse 65% 55% at 85% 110%, oklch(0.58 0.22 155 / 0.42), transparent 60%),
-    radial-gradient(ellipse 65% 55% at 5% 100%, oklch(0.45 0.20 250 / 0.48), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, oklch(0.36 0.14 205 / 0.28), transparent 70%),
-    linear-gradient(180deg, oklch(0.09 0.05 235), oklch(0.07 0.05 245));
-  --gradient-hero: linear-gradient(135deg, oklch(0.85 0.15 195), oklch(0.76 0.17 160));
-
-  /* Liquid Glass shadow — deep soft ambient float */
-  --shadow-liquid:
-    0 1px 0 rgba(255, 255, 255, 0.35) inset,
-    0 -1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
-    0 2px 8px rgba(0, 0, 0, 0.18),
-    0 24px 60px -12px rgba(0, 0, 0, 0.45),
-    0 40px 100px -30px rgba(0, 0, 0, 0.55);
-  --shadow-glow:
-    0 0 90px -10px oklch(0.85 0.18 190 / 0.55),
-    0 12px 40px -10px rgba(0, 0, 0, 0.55);
-  --shadow-card: var(--shadow-liquid);
-}
-
-.dark {
-  --background: oklch(0.16 0.04 230);
-  --foreground: oklch(0.98 0.01 220);
-}
-
-@layer base {
-  * {
-    border-color: var(--color-border);
-  }
-  html, body {
-    min-height: 100%;
-  }
-  body {
-    color: var(--color-foreground);
-    background-color: oklch(0.09 0.05 245);
-    background-image: url("/__l5e/assets-v1/cc212ce0-87fc-441f-9cd4-291afacd206c/starfield-bg.jpeg");
-    background-repeat: no-repeat;
-    background-position: center center;
-    background-size: cover;
-    background-attachment: fixed;
-    font-family: var(--font-display);
-    font-weight: 400;
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-  }
-}
-
 /* =========================================================
-   Apple Liquid Glass — thick milky droplets with refractive rim
+   Solaris Liquid Glass v2
+   Append this at the VERY END of src/styles.css.
+
+   Goal:
+   - translucent glass instead of dark blue opaque cards
+   - bright refractive rim
+   - soft internal glow
+   - subtle top-left specular highlight
+   - Safari-friendly backdrop blur
+   - no SVG displacement filters, so mobile Safari remains reliable
    ========================================================= */
 
-@keyframes liquid-sheen {
-  0%   { transform: translateX(-140%) skewX(-14deg); opacity: 0; }
-  15%  { opacity: 0.55; }
-  70%  { opacity: 0.25; }
-  100% { transform: translateX(240%) skewX(-14deg); opacity: 0; }
+:root {
+  --liquid-glass-fill: rgba(225, 242, 255, 0.075);
+  --liquid-glass-fill-strong: rgba(225, 242, 255, 0.105);
+  --liquid-glass-fill-hover: rgba(235, 248, 255, 0.13);
+
+  --liquid-glass-rim: rgba(255, 255, 255, 0.28);
+  --liquid-glass-rim-bright: rgba(255, 255, 255, 0.62);
+  --liquid-glass-rim-soft: rgba(190, 225, 255, 0.18);
+
+  --liquid-glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset -1px 0 0 rgba(150, 205, 255, 0.08),
+    inset 0 -1px 0 rgba(120, 180, 225, 0.11),
+    0 1px 2px rgba(255, 255, 255, 0.05),
+    0 12px 32px rgba(0, 7, 25, 0.19),
+    0 30px 90px rgba(0, 5, 28, 0.28);
+
+  --liquid-glass-shadow-strong:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    inset 1px 0 0 rgba(255, 255, 255, 0.15),
+    inset -1px 0 0 rgba(150, 205, 255, 0.10),
+    inset 0 -1px 0 rgba(120, 180, 225, 0.14),
+    0 1px 3px rgba(255, 255, 255, 0.06),
+    0 18px 42px rgba(0, 7, 25, 0.22),
+    0 42px 110px rgba(0, 5, 28, 0.34);
 }
 
-/* Large panels — frosted sheets. Opacity driven globally by --panel-alpha
-   (set from the Theme Editor's Panel Opacity slider). Blur is preserved. */
-@utility glass {
+/* -----------------------------------------
+   Main glass panels
+   ----------------------------------------- */
+
+.glass,
+.glass-strong {
   position: relative;
-  background: rgba(10, 20, 40, var(--panel-alpha, 0.10));
-  backdrop-filter: blur(36px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 28px;
-  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.45);
-}
-
-@utility glass-strong {
-  position: relative;
-  background: rgba(10, 20, 40, calc(var(--panel-alpha, 0.10) + 0.04));
-  backdrop-filter: blur(40px) saturate(170%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 32px;
-  box-shadow: 0 24px 60px -22px rgba(0, 0, 0, 0.50);
-}
-
-/* Cards — frosted, opacity from slider */
-[class*="bg-card"]:not([class*="bg-card/"]) {
-  background: rgba(10, 20, 40, var(--panel-alpha, 0.10)) !important;
-  backdrop-filter: blur(36px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  border-radius: 28px !important;
-  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.45) !important;
-}
-
-/* Popovers / dropdowns / selects — slightly denser than base panels */
-[data-radix-popper-content-wrapper] > * {
-  background: rgba(10, 20, 40, calc(var(--panel-alpha, 0.10) + 0.06)) !important;
-  backdrop-filter: blur(34px) saturate(165%);
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  border-radius: 22px !important;
-  box-shadow: 0 18px 44px -18px rgba(0, 0, 0, 0.50) !important;
-  color: var(--foreground) !important;
-}
-
-/* Dialogs — a touch denser to help legibility over any background */
-[role="dialog"][data-state="open"],
-[role="alertdialog"][data-state="open"] {
-  background: rgba(10, 20, 40, calc(var(--panel-alpha, 0.10) + 0.06)) !important;
-  backdrop-filter: blur(40px) saturate(170%);
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
-  border-radius: 32px !important;
-  box-shadow: 0 30px 70px -22px rgba(0, 0, 0, 0.55) !important;
-}
-
-/* Sidebars & top navigation — same slider-controlled tint */
-[data-sidebar],
-aside[class*="sidebar"],
-nav[class*="sidebar"],
-header nav {
-  background: rgba(10, 20, 40, var(--panel-alpha, 0.10)) !important;
-  backdrop-filter: blur(30px) saturate(160%);
-}
-
-
-/* Water-drop button base (used by both glass-button utility and primary override) */
-@utility glass-button {
-  position: relative;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.05) 55%, rgba(200,225,255,0.08)),
-    rgba(230, 245, 255, 0.05);
-  backdrop-filter: blur(30px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  border-radius: 9999px;
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 0 22px rgba(255, 255, 255, 0.08),
-    0 6px 18px rgba(0, 0, 0, 0.28),
-    0 14px 34px -10px rgba(0, 0, 0, 0.40);
-  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease;
   isolation: isolate;
   overflow: hidden;
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0) 46%);
-  }
-  &:hover { transform: scale(1.02); }
-  &:active { transform: scale(0.98); }
+
+  -webkit-backdrop-filter:
+    blur(24px)
+    saturate(185%)
+    brightness(1.08);
+  backdrop-filter:
+    blur(24px)
+    saturate(185%)
+    brightness(1.08);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.13) 0%,
+      rgba(255, 255, 255, 0.055) 26%,
+      rgba(185, 222, 255, 0.035) 58%,
+      rgba(110, 175, 230, 0.025) 100%
+    ),
+    var(--liquid-glass-fill) !important;
+
+  border: 1px solid var(--liquid-glass-rim) !important;
+
+  box-shadow: var(--liquid-glass-shadow) !important;
+
+  /* This catches the pale green/blue stage light under the panel. */
+  background-blend-mode: screen, normal;
 }
 
+.glass-strong {
+  -webkit-backdrop-filter:
+    blur(30px)
+    saturate(195%)
+    brightness(1.09);
+  backdrop-filter:
+    blur(30px)
+    saturate(195%)
+    brightness(1.09);
 
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.065) 30%,
+      rgba(180, 220, 255, 0.04) 62%,
+      rgba(110, 175, 230, 0.03) 100%
+    ),
+    var(--liquid-glass-fill-strong) !important;
 
-/* ALL buttons — unified premium water-drop liquid glass pill (like the sample) */
+  border-color: rgba(255, 255, 255, 0.34) !important;
+  box-shadow: var(--liquid-glass-shadow-strong) !important;
+}
+
+/*
+ * Specular reflection.
+ * This is what the old version was missing: it had blur, but very little
+ * light behaviour around the glass itself.
+ */
+.glass::before,
+.glass-strong::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+
+  background:
+    radial-gradient(
+      120% 72% at 14% -8%,
+      rgba(255, 255, 255, 0.32) 0%,
+      rgba(255, 255, 255, 0.10) 26%,
+      transparent 58%
+    ),
+    radial-gradient(
+      80% 52% at 102% 105%,
+      rgba(120, 205, 255, 0.10),
+      transparent 70%
+    );
+
+  opacity: 0.72;
+}
+
+/* Refractive edge/rim. */
+.glass::after,
+.glass-strong::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.34),
+    inset -1px -1px 0 rgba(90, 160, 220, 0.10),
+    inset 0 0 22px rgba(255, 255, 255, 0.025);
+
+  /* Bright rim mostly at top-left, darker/reflected rim bottom-right. */
+  border: 1px solid transparent;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.58),
+      rgba(255, 255, 255, 0.08) 27%,
+      transparent 46%,
+      rgba(110, 195, 255, 0.08) 72%,
+      rgba(255, 255, 255, 0.18)
+    )
+    border-box;
+  -webkit-mask:
+    linear-gradient(#000 0 0) padding-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/*
+ * Make sure content lives above the decorative pseudo-elements.
+ * This also prevents the glass rim from interfering with clicks.
+ */
+.glass > *,
+.glass-strong > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* -----------------------------------------
+   Smaller cards and tiles
+   ----------------------------------------- */
+
+[class*="bg-card"]:not([class*="bg-card/"]) {
+  position: relative;
+  overflow: hidden;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.115),
+      rgba(255, 255, 255, 0.035) 52%,
+      rgba(120, 190, 240, 0.025)
+    ),
+    rgba(220, 240, 255, 0.055) !important;
+
+  -webkit-backdrop-filter:
+    blur(22px)
+    saturate(180%);
+  backdrop-filter:
+    blur(22px)
+    saturate(180%);
+
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -1px 0 rgba(120, 190, 235, 0.08),
+    0 10px 32px rgba(0, 7, 28, 0.18) !important;
+}
+
+/* -----------------------------------------
+   "Your vote is in" / success-type hero card
+   The gradient glow sits inside the glass, not instead of the glass.
+   ----------------------------------------- */
+
+.glass-strong:has(.text-primary),
+.glass:has(.text-primary) {
+  background:
+    radial-gradient(
+      80% 70% at 50% -10%,
+      rgba(160, 255, 198, 0.075),
+      transparent 62%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.14),
+      rgba(255, 255, 255, 0.045) 48%,
+      rgba(100, 190, 225, 0.025)
+    ),
+    var(--liquid-glass-fill-strong) !important;
+}
+
+/* -----------------------------------------
+   Navigation glass
+   ----------------------------------------- */
+
+header,
+header nav {
+  -webkit-backdrop-filter:
+    blur(22px)
+    saturate(175%);
+  backdrop-filter:
+    blur(22px)
+    saturate(175%);
+}
+
+header nav {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.075),
+      rgba(255, 255, 255, 0.018)
+    ) !important;
+}
+
+/* -----------------------------------------
+   Popovers and dialogs
+   ----------------------------------------- */
+
+[data-radix-popper-content-wrapper] > *,
+[role="dialog"][data-state="open"],
+[role="alertdialog"][data-state="open"] {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.14),
+      rgba(255, 255, 255, 0.05) 45%,
+      rgba(110, 180, 235, 0.035)
+    ),
+    rgba(13, 28, 52, 0.34) !important;
+
+  -webkit-backdrop-filter:
+    blur(32px)
+    saturate(190%);
+  backdrop-filter:
+    blur(32px)
+    saturate(190%);
+
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 28px 80px rgba(0, 4, 20, 0.40) !important;
+}
+
+/* -----------------------------------------
+   Buttons: clear liquid capsules
+   ----------------------------------------- */
+
 button.bg-primary,
 button.bg-secondary,
 button[class*="bg-background"],
@@ -301,125 +293,119 @@ button.border.border-input,
 .bg-primary:is(button, a, [role="button"]),
 [class*="bg-secondary"]:is(button, a, [role="button"]) {
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04) 55%, rgba(200,225,255,0.08)),
-    rgba(230, 245, 255, 0.05) !important;
-  backdrop-filter: blur(30px) saturate(195%);
-  border: 1px solid rgba(255, 255, 255, 0.44) !important;
-  border-radius: 9999px !important;
-  color: var(--foreground) !important;
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 0 22px rgba(255, 255, 255, 0.08),
-    0 6px 18px rgba(0, 0, 0, 0.28),
-    0 14px 34px -10px rgba(0, 0, 0, 0.40) !important;
-  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease;
-}
-button.bg-primary:hover,
-button.bg-secondary:hover,
-[class*=" bg-primary"]:is(button, a, [role="button"]):hover,
-[class*="bg-secondary"]:is(button, a, [role="button"]):hover {
-  transform: scale(1.02);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.05) 55%, rgba(200,225,255,0.10)),
-    rgba(230, 245, 255, 0.07) !important;
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
-    0 8px 22px rgba(0, 0, 0, 0.32),
-    0 18px 44px -10px rgba(0, 0, 0, 0.45),
-    0 0 40px -6px var(--glow, oklch(0.85 0.16 190 / 0.55)) !important;
-}
-button.bg-primary:active,
-button.bg-secondary:active { transform: scale(0.98); }
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.24),
+      rgba(255, 255, 255, 0.06) 52%,
+      rgba(165, 215, 255, 0.055)
+    ),
+    rgba(230, 245, 255, 0.055) !important;
 
-/* Inputs & textareas — recessed liquid capsules */
+  -webkit-backdrop-filter:
+    blur(18px)
+    saturate(190%);
+  backdrop-filter:
+    blur(18px)
+    saturate(190%);
+
+  border: 1px solid rgba(255, 255, 255, 0.36) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.58),
+    inset 0 -1px 0 rgba(130, 195, 240, 0.12),
+    0 6px 16px rgba(0, 6, 25, 0.20),
+    0 16px 34px rgba(0, 5, 24, 0.16) !important;
+}
+
+/* -----------------------------------------
+   Inputs
+   ----------------------------------------- */
+
 input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]),
 textarea,
 select {
   background:
-    linear-gradient(180deg, rgba(0,0,0,0.06), rgba(255,255,255,0.018)),
-    rgba(230, 245, 255, 0.025) !important;
-  backdrop-filter: blur(30px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.24) !important;
-  border-radius: 16px !important;
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.035),
+      rgba(0, 8, 24, 0.08)
+    ),
+    rgba(225, 242, 255, 0.035) !important;
+
+  -webkit-backdrop-filter:
+    blur(18px)
+    saturate(170%);
+  backdrop-filter:
+    blur(18px)
+    saturate(170%);
+
+  border-color: rgba(255, 255, 255, 0.20) !important;
+
   box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 0 rgba(255, 255, 255, 0.08);
-  color: var(--foreground);
-  transition: border-color .2s ease, box-shadow .2s ease;
-}
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: none !important;
-  border-color: rgba(255, 255, 255, 0.55) !important;
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    0 0 0 3px oklch(0.85 0.14 190 / 0.35),
-    0 0 30px -4px oklch(0.85 0.16 190 / 0.45) !important;
+    inset 0 1px 4px rgba(0, 5, 20, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.13) !important;
 }
 
-/* Rounded pill helpers for common shadcn shapes */
-.rounded-md { border-radius: 16px !important; }
-.rounded-lg { border-radius: 20px !important; }
-.rounded-xl { border-radius: 26px !important; }
-.rounded-2xl { border-radius: 32px !important; }
+/* -----------------------------------------
+   Fallback if backdrop-filter is unavailable
+   ----------------------------------------- */
 
-@utility text-gradient {
-  background: var(--gradient-hero);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass,
+  .glass-strong,
+  [class*="bg-card"]:not([class*="bg-card/"]),
+  [data-radix-popper-content-wrapper] > *,
+  [role="dialog"][data-state="open"],
+  [role="alertdialog"][data-state="open"] {
+    background: rgba(16, 35, 62, 0.88) !important;
+  }
 }
 
-@utility bg-hero {
-  background: var(--gradient-hero);
+/* -----------------------------------------
+   Mobile performance / readability
+   ----------------------------------------- */
+
+@media (max-width: 640px) {
+  .glass,
+  .glass-strong {
+    -webkit-backdrop-filter:
+      blur(18px)
+      saturate(175%);
+    backdrop-filter:
+      blur(18px)
+      saturate(175%);
+
+    /*
+     * Slightly brighter glass on phones. A giant almost-black card over a
+     * dark stage background looks like opaque navy plastic, which is exactly
+     * what the screenshot currently suffers from.
+     */
+    background:
+      linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.145),
+        rgba(255, 255, 255, 0.055) 42%,
+        rgba(120, 190, 240, 0.028)
+      ),
+      rgba(225, 242, 255, 0.07) !important;
+
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      inset 0 -1px 0 rgba(130, 190, 230, 0.10),
+      0 12px 38px rgba(0, 4, 22, 0.24) !important;
+  }
+
+  .glass-strong {
+    border-color: rgba(255, 255, 255, 0.31) !important;
+  }
 }
 
-@utility shadow-glow {
-  box-shadow: var(--shadow-glow);
-}
-
-@utility font-logo {
-  font-family: var(--font-logo);
-  letter-spacing: 0.02em;
-}
-
-
-/* ── Motion & feedback utilities ─────────────────────────────────── */
-@keyframes solaris-fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes solaris-pop-in {
-  0% { opacity: 0; transform: scale(0.94); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-@utility animate-fade-in {
-  animation: solaris-fade-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@utility animate-pop-in {
-  animation: solaris-pop-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* Visible keyboard focus everywhere, matching the glass rim */
-:where(a, button, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
-  outline: 2px solid oklch(0.9 0.13 190 / 0.85);
-  outline-offset: 2px;
-  border-radius: 14px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .glass-strong,
+  [class*="bg-card"]:not([class*="bg-card/"]) {
+    background: rgba(18, 37, 64, 0.92) !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }
